@@ -182,31 +182,44 @@ class RSACracker:
                         
                         if "flag" in ascii_text.lower():
                             self.log("\nFLAG FOUND!!!", "red")
-                        
                         return  # Exit early, we're done!
                 
-                # Continue with other attacks if low exponent attack failed
-                if self.stop_flag: 
-                    return
-                p_found, q_found = smart_factor_n(n)
-
+                # Try FactorDB first (online database)
+                self.log(f"[*] Querying FactorDB (factordb.com)...")
+                p_found, q_found = smart_factor_n(n, use_factordb=True)
+                
                 if self.stop_flag: 
                     return
 
                 if p_found:
                     p, q = sorted([p_found, q_found])
-                    self.log(f"[+] FACTORED! p = {p}", "green")
-                    self.log(f"[+] FACTORED! q = {q}", "green")
+                    self.log(f"[+] FACTORDB SUCCESS! Found p ({p.bit_length()} bits)", "green")
+                    self.log(f"[+] FACTORDB SUCCESS! Found q ({q.bit_length()} bits)", "green")
 
                     if e:
                         d = compute_d(p, q, e)
-                        self.log("[+] d computed")
+                        self.log("[+] d computed from p,q,e")
                 else:
-                    self.log("[-] Factoring failed → trying Wiener...")
-                    if e:
-                        d = wiener_attack(e, n)
-                        if d:
-                            self.log(f"[+] Wiener SUCCESS! d = {hex(d)}", "green")
+                    self.log("[-] FactorDB failed → trying local factorization...")
+                    # Try local methods without FactorDB
+                    p_found, q_found = smart_factor_n(n, use_factordb=False)
+                    
+                    if p_found:
+                        p, q = sorted([p_found, q_found])
+                        self.log(f"[+] LOCAL FACTORIZATION SUCCESS! p = {p}", "green")
+                        self.log(f"[+] LOCAL FACTORIZATION SUCCESS! q = {q}", "green")
+
+                        if e:
+                            d = compute_d(p, q, e)
+                            self.log("[+] d computed")
+                    else:
+                        self.log("[-] Local factoring failed → trying Wiener attack...")
+                        if e:
+                            d = wiener_attack(e, n)
+                            if d:
+                                self.log(f"[+] Wiener SUCCESS! d = {hex(d)}", "green")
+                        else:
+                            self.log("[-] No e provided for Wiener attack")
 
             # Dump computed values
             self.log("\n" + "═" * 80)
