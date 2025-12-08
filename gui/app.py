@@ -1,10 +1,26 @@
+# gui/app.py
 import threading
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 import time
 import traceback
-from rsa_core import *
+import sys
+import os
 
+# Add the rsa_core directory to the path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'rsa_core'))
+
+# Now import from rsa_core
+try:
+    from rsa_core import (
+        int_to_bytes, bytes_to_hex, try_decode,
+        rsa_decrypt, compute_d, smart_factor_n,
+        wiener_attack, low_exponent_attack
+    )
+except ImportError as e:
+    print(f"Import Error: {e}")
+    print("Make sure rsa_core modules are in the correct location")
+    raise
 
 class RSACracker:
     def __init__(self, root):
@@ -13,7 +29,8 @@ class RSACracker:
         self.root.geometry("1150x860")
         self.root.configure(bg="#0d1117")
 
-        self.stop_flag = False     # ← IMPORTANT: flag to stop threads
+        self.stop_flag = False
+        self.start_time = None
 
         self.style = ttk.Style()
         self.style.theme_use('clam')
@@ -70,9 +87,6 @@ class RSACracker:
         self.logbox.tag_config("red", foreground="#ff5555", font=("Consolas", 16, "bold"))
         self.logbox.tag_config("done", foreground="#00ff88", font=("Consolas", 14, "bold"))
 
-    # -----------------------
-    # Utility functions
-    # -----------------------
     def get(self, k):
         v = self.entries[k].get().strip()
         return int(v, 0) if v else None
@@ -84,11 +98,8 @@ class RSACracker:
         self.logbox.see("end")
         self.root.update_idletasks()
 
-    # -----------------------
-    # CLEAR BUTTON (STOP EVERYTHING)
-    # -----------------------
     def clear(self):
-        self.stop_flag = True                     # ← STOP threads immediately
+        self.stop_flag = True
         self.btn_crack.config(state="normal", text="CRACK RSA")
         self.logbox.delete(1.0, "end")
 
@@ -98,11 +109,8 @@ class RSACracker:
         self.status.set("Ready")
         self.start_time = None
 
-    # -----------------------
-    # Run crack button
-    # -----------------------
     def start_crack(self):
-        self.stop_flag = False                   # ← RESET stop flag
+        self.stop_flag = False
         self.logbox.delete(1.0, "end")
 
         self.log("RSA Cracker Pro Started... (background thread)", "green")
@@ -114,9 +122,6 @@ class RSACracker:
         threading.Thread(target=self.crack_thread, daemon=True).start()
         threading.Thread(target=self.timer_thread, daemon=True).start()
 
-    # -----------------------
-    # Timer for UI
-    # -----------------------
     def timer_thread(self):
         while not self.stop_flag and self.btn_crack["state"] == "disabled":
             elapsed = time.time() - self.start_time
@@ -131,9 +136,6 @@ class RSACracker:
             m, s = divmod(elapsed, 60)
             self.status.set(f"Finished in {int(m)}m {s:.1f}s")
 
-    # -----------------------
-    # Main RSA cracking logic
-    # -----------------------
     def crack_thread(self):
         try:
             if self.stop_flag:
@@ -148,7 +150,8 @@ class RSACracker:
 
             # If p and q are given →
             if p and q:
-                if self.stop_flag: return
+                if self.stop_flag: 
+                    return
                 n = p * q
                 self.log(f"[+] n = p×q = {hex(n)}")
 
@@ -160,11 +163,35 @@ class RSACracker:
             if n and not (p or q or d):
                 bits = n.bit_length()
                 self.log(f"[*] n is {bits}-bit → choosing optimal attack...")
-
-                if self.stop_flag: return
+                
+                # FIRST: Try low exponent attack if e is small
+                if e and c and e <= 100:  # e is small enough to try
+                    self.log(f"[*] Small e={e} detected → trying low exponent attack...")
+                    m_low = low_exponent_attack(e, n, c)
+                    if m_low:
+                        self.log(f"[+] LOW EXPONENT ATTACK SUCCESS! m = {hex(m_low)}", "green")
+                        
+                        # Decrypt directly
+                        raw = int_to_bytes(m_low)
+                        ascii_text = try_decode(raw)
+                        
+                        self.log("\nDecrypted Plaintext:")
+                        self.log(f"  ASCII = {ascii_text}")
+                        self.log(f"  HEX   = {raw.hex()}")
+                        self.log(f"  DEC   = {m_low}")
+                        
+                        if "flag" in ascii_text.lower():
+                            self.log("\nFLAG FOUND!!!", "red")
+                        
+                        return  # Exit early, we're done!
+                
+                # Continue with other attacks if low exponent attack failed
+                if self.stop_flag: 
+                    return
                 p_found, q_found = smart_factor_n(n)
 
-                if self.stop_flag: return
+                if self.stop_flag: 
+                    return
 
                 if p_found:
                     p, q = sorted([p_found, q_found])
@@ -181,9 +208,7 @@ class RSACracker:
                         if d:
                             self.log(f"[+] Wiener SUCCESS! d = {hex(d)}", "green")
 
-            # ---------------------------
             # Dump computed values
-            # ---------------------------
             self.log("\n" + "═" * 80)
             self.log("RESULT:")
 
@@ -193,9 +218,7 @@ class RSACracker:
                     self.log(f"    {k.upper()} (hex) = {hex(v)}")
                     self.log(f"    {k.upper()} (dec) = {v}\n")
 
-            # ---------------------------
             # Decrypt section
-            # ---------------------------
             if not self.stop_flag and c and d and n:
                 m = rsa_decrypt(c, d, n)
                 raw = int_to_bytes(m)
