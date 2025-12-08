@@ -1,0 +1,226 @@
+import threading
+import tkinter as tk
+from tkinter import ttk, messagebox, scrolledtext
+import time
+import traceback
+from rsa_core import *
+
+
+class RSACracker:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("CTF RSA Cracker Pro 2025")
+        self.root.geometry("1150x860")
+        self.root.configure(bg="#0d1117")
+
+        self.stop_flag = False     # ← IMPORTANT: flag to stop threads
+
+        self.style = ttk.Style()
+        self.style.theme_use('clam')
+        self.create_ui()
+
+    def create_ui(self):
+        main = tk.Frame(self.root, bg="#0d1117")
+        main.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+
+        labels = ["e (public exponent)", "n (modulus)", "c (ciphertext)",
+                  "p (prime 1)", "q (prime 2)", "d (private key)"]
+
+        self.entries = {}
+        for i, text in enumerate(labels):
+            tk.Label(main, text=text + ":", bg="#0d1117", fg="#58a6ff",
+                     font=("Consolas", 11)).grid(row=i, column=0, sticky="e", pady=6, padx=5)
+
+            entry = tk.Entry(main, width=90, font=("Consolas", 10),
+                             bg="#161b22", fg="#f0f6fc", insertbackground="white")
+            entry.grid(row=i, column=1, pady=6, padx=5)
+
+            self.entries[text.split()[0].lower() if '(' not in text else text.split()[0]] = entry
+
+        # Status
+        self.status = tk.StringVar(value="Ready")
+        tk.Label(main, textvariable=self.status, bg="#0d1117",
+                 fg="#79c0ff", font=("Consolas", 10))\
+            .grid(row=7, column=0, columnspan=2, sticky="we", pady=10)
+
+        # Buttons
+        btns = tk.Frame(main, bg="#0d1117")
+        btns.grid(row=8, column=0, columnspan=2, pady=15)
+
+        self.btn_crack = tk.Button(btns, text="CRACK RSA",
+                                   command=self.start_crack,
+                                   bg="#238636", fg="white",
+                                   font=("Arial", 14, "bold"), width=20, height=2)
+        self.btn_crack.pack(side="left", padx=10)
+
+        tk.Button(btns, text="Clear", command=self.clear,
+                  bg="#da3633", fg="white").pack(side="left", padx=10)
+
+        # Output box
+        out = tk.LabelFrame(self.root, text=" Output & Flag ",
+                            font=("Arial", 14, "bold"),
+                            bg="#0d1117", fg="#ffa657")
+        out.pack(fill=tk.BOTH, expand=True, padx=15, pady=(0, 15))
+
+        self.logbox = scrolledtext.ScrolledText(out, font=("Consolas", 11),
+                                                bg="#0d1117", fg="#f0f6fc")
+        self.logbox.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        self.logbox.tag_config("green", foreground="#00ff00")
+        self.logbox.tag_config("red", foreground="#ff5555", font=("Consolas", 16, "bold"))
+        self.logbox.tag_config("done", foreground="#00ff88", font=("Consolas", 14, "bold"))
+
+    # -----------------------
+    # Utility functions
+    # -----------------------
+    def get(self, k):
+        v = self.entries[k].get().strip()
+        return int(v, 0) if v else None
+
+    def log(self, msg, tag=None):
+        if self.stop_flag:
+            return
+        self.logbox.insert("end", msg + "\n", tag)
+        self.logbox.see("end")
+        self.root.update_idletasks()
+
+    # -----------------------
+    # CLEAR BUTTON (STOP EVERYTHING)
+    # -----------------------
+    def clear(self):
+        self.stop_flag = True                     # ← STOP threads immediately
+        self.btn_crack.config(state="normal", text="CRACK RSA")
+        self.logbox.delete(1.0, "end")
+
+        for e in self.entries.values():
+            e.delete(0, "end")
+
+        self.status.set("Ready")
+        self.start_time = None
+
+    # -----------------------
+    # Run crack button
+    # -----------------------
+    def start_crack(self):
+        self.stop_flag = False                   # ← RESET stop flag
+        self.logbox.delete(1.0, "end")
+
+        self.log("RSA Cracker Pro Started... (background thread)", "green")
+        self.btn_crack.config(state="disabled", text="WORKING...")
+
+        self.status.set("Running... 0.0s")
+        self.start_time = time.time()
+
+        threading.Thread(target=self.crack_thread, daemon=True).start()
+        threading.Thread(target=self.timer_thread, daemon=True).start()
+
+    # -----------------------
+    # Timer for UI
+    # -----------------------
+    def timer_thread(self):
+        while not self.stop_flag and self.btn_crack["state"] == "disabled":
+            elapsed = time.time() - self.start_time
+            m, s = divmod(elapsed, 60)
+            self.status.set(f"Running... {int(m)}m {s:.1f}s")
+            time.sleep(0.1)
+
+        if self.stop_flag:
+            self.status.set("Stopped")
+        else:
+            elapsed = time.time() - self.start_time
+            m, s = divmod(elapsed, 60)
+            self.status.set(f"Finished in {int(m)}m {s:.1f}s")
+
+    # -----------------------
+    # Main RSA cracking logic
+    # -----------------------
+    def crack_thread(self):
+        try:
+            if self.stop_flag:
+                return
+
+            e = self.get("e")
+            n = self.get("n")
+            c = self.get("c")
+            p = self.get("p")
+            q = self.get("q")
+            d = self.get("d")
+
+            # If p and q are given →
+            if p and q:
+                if self.stop_flag: return
+                n = p * q
+                self.log(f"[+] n = p×q = {hex(n)}")
+
+                if e and not d:
+                    d = compute_d(p, q, e)
+                    self.log("[+] d computed from p,q,e")
+
+            # Auto attack if missing values
+            if n and not (p or q or d):
+                bits = n.bit_length()
+                self.log(f"[*] n is {bits}-bit → choosing optimal attack...")
+
+                if self.stop_flag: return
+                p_found, q_found = smart_factor_n(n)
+
+                if self.stop_flag: return
+
+                if p_found:
+                    p, q = sorted([p_found, q_found])
+                    self.log(f"[+] FACTORED! p = {p}", "green")
+                    self.log(f"[+] FACTORED! q = {q}", "green")
+
+                    if e:
+                        d = compute_d(p, q, e)
+                        self.log("[+] d computed")
+                else:
+                    self.log("[-] Factoring failed → trying Wiener...")
+                    if e:
+                        d = wiener_attack(e, n)
+                        if d:
+                            self.log(f"[+] Wiener SUCCESS! d = {hex(d)}", "green")
+
+            # ---------------------------
+            # Dump computed values
+            # ---------------------------
+            self.log("\n" + "═" * 80)
+            self.log("RESULT:")
+
+            dump_pairs = [("e", e), ("n", n), ("c", c), ("p", p), ("q", q), ("d", d)]
+            for k, v in dump_pairs:
+                if v is not None:
+                    self.log(f"    {k.upper()} (hex) = {hex(v)}")
+                    self.log(f"    {k.upper()} (dec) = {v}\n")
+
+            # ---------------------------
+            # Decrypt section
+            # ---------------------------
+            if not self.stop_flag and c and d and n:
+                m = rsa_decrypt(c, d, n)
+                raw = int_to_bytes(m)
+                ascii_text = try_decode(raw)
+
+                self.log("Decrypted Plaintext:")
+                self.log(f"  ASCII = {ascii_text}")
+                self.log(f"  HEX   = {raw.hex()}")
+                self.log(f"  DEC   = {m}")
+                self.log(f"  BYTES = {raw}")
+
+                if "flag" in ascii_text.lower():
+                    self.log("\nFLAG FOUND!!!", "red")
+                else:
+                    self.log("\n[+] Decrypted!")
+
+            elif not self.stop_flag:
+                self.log("[!] Cannot decrypt — missing c/d/n")
+
+        except Exception as ex:
+            self.log(f"\n[ERROR] {ex}\n{traceback.format_exc()}")
+
+        finally:
+            if not self.stop_flag:
+                self.root.after(0, lambda: self.btn_crack.config(state="normal", text="CRACK RSA"))
+                self.log("\nCRACKING COMPLETED!", "done")
+            else:
+                self.btn_crack.config(state="normal", text="CRACK RSA")
