@@ -55,7 +55,6 @@ def low_exponent_attack(e: int, n: int, c: int):
     
     return None
 
-# rsa_core/attacks.py - Fix wiener_attack function
 def wiener_attack(e: int, n: int):
     """
     Wiener's attack to recover d when d is small.
@@ -116,7 +115,7 @@ def wiener_attack(e: int, n: int):
                 return int(k)  # k is d
     
     return None
-# rsa_core/attacks.py - Update double_encryption_attack function
+
 def double_encryption_attack(n: int, e1: int, e2: int, c: int, log_callback=None):
     """
     Attack double encryption: c = (m^e1)^e2 mod n = m^(e1*e2) mod n

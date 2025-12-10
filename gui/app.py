@@ -141,7 +141,7 @@ class RSACracker:
             m, s = divmod(elapsed, 60)
             self.status.set(f"Finished in {int(m)}m {s:.1f}s")
 
-    # gui/app.py - Update the crack_thread method to use double_encryption_attack
+    # gui/app.py - Update the crack_thread method for better factoring
     def crack_thread(self):
         try:
             if self.stop_flag:
@@ -205,7 +205,7 @@ class RSACracker:
             # Double encryption requires: n, at least 2 exponents, and a ciphertext
             if n and len(exponents) >= 2 and active_c:
                 self.log(f"[*] Detected {len(exponents)} exponents and ciphertext in '{active_c_label}'")
-                self.log(f"[*] Trying double encryption attack...")
+                self.log(f"[*] This might be a double encryption scenario")
                 
                 # If we have exactly 2 exponents, try double_encryption_attack
                 if len(exponents) == 2:
@@ -290,9 +290,11 @@ class RSACracker:
             # =============================================
             if m is None and n and not (p or q or d) and active_c:
                 bits = n.bit_length()
+                
+                # EXTENDED FACTORING: Try up to 2000 bits
                 self.log(f"[*] n is {bits}-bit → choosing optimal attack...")
                 
-                # Use the first available exponent
+                # FIRST: Try low exponent attack if e is small
                 active_e = None
                 if e is not None:
                     active_e = e
@@ -301,7 +303,6 @@ class RSACracker:
                 elif e2 is not None:
                     active_e = e2
                 
-                # FIRST: Try low exponent attack if e is small
                 if active_e and active_e <= 100:
                     self.log(f"[*] Small e={active_e} detected → trying low exponent attack...")
                     m_low = low_exponent_attack(active_e, n, active_c)
@@ -311,8 +312,8 @@ class RSACracker:
                     
                 # If low exponent attack didn't work or wasn't applicable
                 if m is None:
-                    # Try FactorDB first (online database)
-                    self.log(f"[*] Querying FactorDB (factordb.com)...")
+                    # Try FactorDB first (online database) - works up to 2000 bits
+                    self.log(f"[*] Querying FactorDB (factordb.com) for {bits}-bit n...")
                     p_found, q_found = smart_factor_n(n, use_factordb=True)
                     
                     if self.stop_flag: 
@@ -327,26 +328,31 @@ class RSACracker:
                             d = compute_d(p, q, active_e)
                             self.log("[+] d computed from p,q,e")
                     else:
-                        self.log("[-] FactorDB failed → trying local factorization...")
-                        # Try local methods without FactorDB
-                        p_found, q_found = smart_factor_n(n, use_factordb=False)
-                        
-                        if p_found:
-                            p, q = sorted([p_found, q_found])
-                            self.log(f"[+] LOCAL FACTORIZATION SUCCESS! p = {p}", "green")
-                            self.log(f"[+] LOCAL FACTORIZATION SUCCESS! q = {q}", "green")
+                        # Only try local factorization for numbers up to ~1024 bits
+                        if bits <= 1024:
+                            self.log("[-] FactorDB failed → trying local factorization...")
+                            # Try local methods without FactorDB
+                            p_found, q_found = smart_factor_n(n, use_factordb=False)
+                            
+                            if p_found:
+                                p, q = sorted([p_found, q_found])
+                                self.log(f"[+] LOCAL FACTORIZATION SUCCESS! p = {p}", "green")
+                                self.log(f"[+] LOCAL FACTORIZATION SUCCESS! q = {q}", "green")
 
-                            if active_e:
-                                d = compute_d(p, q, active_e)
-                                self.log("[+] d computed")
-                        else:
-                            self.log("[-] Local factoring failed → trying Wiener attack...")
-                            if active_e:
-                                d = wiener_attack(active_e, n)
-                                if d:
-                                    self.log(f"[+] Wiener SUCCESS! d = {d}", "green")
+                                if active_e:
+                                    d = compute_d(p, q, active_e)
+                                    self.log("[+] d computed")
                             else:
-                                self.log("[-] No e provided for Wiener attack")
+                                self.log("[-] Local factoring failed → trying Wiener attack...")
+                                if active_e:
+                                    d = wiener_attack(active_e, n)
+                                    if d:
+                                        self.log(f"[+] Wiener SUCCESS! d = {d}", "green")
+                                else:
+                                    self.log("[-] No e provided for Wiener attack")
+                        else:
+                            self.log(f"[-] Number too large ({bits} bits) for local factoring")
+                            self.log("[*] Try providing p and q manually if you have them")
 
             # =============================================
             # Show result section for all cases that have data
