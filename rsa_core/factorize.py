@@ -309,23 +309,37 @@ def smart_factor_n(n: int, use_factordb=True):
             return min(f, n // f), max(f, n // f)
 
     # ==================================================
-    # VERY LARGE (1024–2048 bits) → Extended ECM
+    # VERY LARGE (1024–4096 bits) → Extended ECM (best-effort)
     # ==================================================
-    if bits <= 2048:
-        print("[Factor] Trying extended ECM for large number...")
+    if bits <= 4096:
+        print("[Factor] Trying extended ECM for very large number (best-effort, time-limited)...")
         
-        # Use more aggressive parameters for larger numbers
-        B1 = 500_000
-        curves_per_thread = 15
-        timeout = 3.0
-        
-        f = threaded_ecm(n, B1=B1, threads=4, curves_per_thread=curves_per_thread, timeout=timeout)
+        # Use more conservative parameters for GUI safety
+        # The bigger the number, the longer it may take; we cap time per thread.
+        if bits <= 1536:
+            B1 = 500_000
+            curves_per_thread = 30
+            timeout = 3.0
+            threads = 6
+        elif bits <= 3072:
+            B1 = 600_000
+            curves_per_thread = 20
+            timeout = 3.0
+            threads = 6
+        else:
+            # 3073-4096 bits: best-effort, but very unlikely to succeed in reasonable time
+            B1 = 750_000
+            curves_per_thread = 10
+            timeout = 3.0
+            threads = 4
+
+        f = threaded_ecm(n, B1=B1, threads=threads, curves_per_thread=curves_per_thread, timeout=timeout)
         if f:
             print(f"[Factor] Extended ECM found factor: {f}")
             return min(f, n // f), max(f, n // f)
 
     # ==================================================
-    # HUGE (> 2048 bits) → Stop early
+    # HUGE (> 4096 bits) → Stop early
     # ==================================================
-    print(f"[Factor] Number too large ({bits} bits) for efficient factoring")
+    print(f"[Factor] Number too large ({bits} bits) for efficient factoring in this tool (max 4096 bits).")
     return None, None

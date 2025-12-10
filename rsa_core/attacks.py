@@ -1,5 +1,7 @@
 # rsa_core/attacks.py
 from math import isqrt
+from .utils import mod_inverse
+import gmpy2
 
 def low_exponent_attack(e: int, n: int, c: int):
     """
@@ -222,3 +224,88 @@ def double_encryption_attack(n: int, e1: int, e2: int, c: int, log_callback=None
     
     log(f"[Double Encryption] All attacks failed")
     return None
+
+def is_probable_prime(n, rounds=8):
+    """
+    Miller-Rabin probable prime test fallback if gmpy2 isn't available.
+    rounds default 8 gives very low false-positive probability for large n.
+    """
+    if n < 2:
+        return False
+    # small primes check
+    small_primes = [2,3,5,7,11,13,17,19,23,29,31,37,41]
+    for p in small_primes:
+        if n == p:
+            return True
+        if n % p == 0:
+            return False
+
+    # if gmpy2 available use it
+    if gmpy2:
+        return bool(gmpy2.is_prime(n))
+
+    # Miller-Rabin deterministic bases for < 2^64 could be used,
+    # but for huge numbers we just do probabilistic rounds.
+    d = n - 1
+    s = 0
+    while d % 2 == 0:
+        d //= 2
+        s += 1
+
+    import random
+    for _ in range(rounds):
+        a = random.randrange(2, n - 1)
+        x = pow(a, d, n)
+        if x == 1 or x == n - 1:
+            continue
+        skip = False
+        for _r in range(s - 1):
+            x = pow(x, 2, n)
+            if x == n - 1:
+                skip = True
+                break
+        if skip:
+            continue
+        return False
+    return True
+
+def massive_rsa_attack(n: int, e: int, c: int, log_callback=None):
+    """
+    Detects if n is prime (or very likely prime). If so:
+      phi = n-1
+      d = mod_inverse(e, phi)
+      m = c^d mod n
+    Returns the plaintext integer m if successful, otherwise None.
+    """
+    def log(msg):
+        if log_callback:
+            log_callback(msg)
+
+    log("[Massive RSA] Checking if modulus n is prime or probably prime...")
+    try:
+        prime_flag = False
+        if gmpy2:
+            prime_flag = bool(gmpy2.is_prime(n))
+        else:
+            prime_flag = is_probable_prime(n, rounds=12)
+
+        if not prime_flag:
+            log("[Massive RSA] n does NOT appear to be prime.")
+            return None
+
+        log("[Massive RSA] n is prime (or probable prime). Computing phi = n-1 ...")
+
+        # compute d = e^{-1} mod (n-1)
+        try:
+            d = mod_inverse(e, n - 1)
+        except Exception as ex:
+            log(f"[Massive RSA] modular inverse failed: {ex}")
+            return None
+
+        log(f"[Massive RSA] computed d (private exponent). Decrypting...")
+        m = pow(c, d, n)
+        log(f"[Massive RSA] Decryption complete.")
+        return m
+    except Exception as ex:
+        log(f"[Massive RSA] Error: {ex}")
+        return None

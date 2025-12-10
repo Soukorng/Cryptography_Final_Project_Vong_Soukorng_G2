@@ -16,7 +16,7 @@ try:
         int_to_bytes, bytes_to_hex, try_decode,
         rsa_decrypt, compute_d, smart_factor_n,
         wiener_attack, low_exponent_attack, rsa_crt_decrypt,
-        double_encryption_attack
+        double_encryption_attack, massive_rsa_attack
     )
 except ImportError as e:
     print(f"Import Error: {e}")
@@ -284,6 +284,19 @@ class RSACracker:
                 if active_e and not d:
                     d = compute_d(p, q, active_e)
                     self.log(f"[+] d computed from p,q,e")
+            
+            # =============================================
+            # MASSIVE RSA CHECK: if n is prime, compute phi = n-1, d, then decrypt
+            # =============================================
+            if m is None and n and active_c and (e is not None or e1 is not None or e2 is not None):
+                # prefer the first available exponent
+                active_e = e if e is not None else (e1 if e1 is not None else e2)
+                if active_e:
+                    self.log("[*] Checking for Massive RSA attack (n prime)...")
+                    m_massive = massive_rsa_attack(n, active_e, active_c, log_callback=self.log)
+                    if m_massive:
+                        self.log("[+] Massive RSA attack SUCCESS! (n was prime)", "green")
+                        m = m_massive
 
             # =============================================
             # CASE 3: No p, q, dp, dq - try standard attacks
