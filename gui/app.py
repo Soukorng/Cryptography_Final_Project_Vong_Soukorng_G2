@@ -759,7 +759,7 @@ class RSACracker:
                     m = m_massive
             
             # =================== DISPLAY RESULTS ===================
-            self.log("\n" + "=" * 70, "header")
+            self.log("=" * 70, "header")
             
             if m is not None:
                 # Convert to bytes
@@ -767,6 +767,7 @@ class RSACracker:
                 ascii_text = try_decode(raw_bytes)
                 hex_text = raw_bytes.hex()
                 
+                self.log("=" * 70, "header")
                 self.log("🎉 DECRYPTION SUCCESSFUL!", "success")
                 self.log("=" * 70, "header")
                 
@@ -779,23 +780,6 @@ class RSACracker:
                 
                 if raw_bytes:
                     self.log(f"Bytes (first 100): {raw_bytes[:100]}{'...' if len(raw_bytes) > 100 else ''}")
-                
-                # Check for flags
-                flag_indicators = ['flag{', 'ctf{', 'pico{', 'L3AK{', 'scriptCTF{', 'FLAG{', 'CTF{']
-                text_lower = ascii_text.lower()
-                
-                for indicator in flag_indicators:
-                    if indicator in text_lower or indicator.replace('{', '') in text_lower:
-                        self.log("\n" + "!" * 60, "flag")
-                        self.log("🚩 FLAG FOUND! 🚩", "flag")
-                        self.log("!" * 60, "flag")
-                        self.log(f"\n🔥 {ascii_text}", "flag")
-                        
-                        # Auto-copy flag to clipboard
-                        self.root.clipboard_clear()
-                        self.root.clipboard_append(ascii_text.strip())
-                        self.log("[Flag copied to clipboard]", "param")
-                        break
                 
                 # Save to history
                 result_entry = {
@@ -817,7 +801,7 @@ class RSACracker:
                 self.log("  • Check if modulus can be factored online")
                 self.log("  • Verify parameter formats (hex with 0x, decimal)")
             
-            self.log("\n" + "=" * 70, "header")
+            self.log("=" * 70, "header")
             
         except Exception as ex:
             self.log(f"\n❌ ERROR: {str(ex)}", "error")
@@ -905,7 +889,7 @@ class RSACracker:
             self.log("\n📜 No history available yet", "warning")
             return
         
-        self.log("\n" + "=" * 70, "header")
+        self.log("=" * 70, "header")
         self.log("📜 RESULTS HISTORY", "header")
         self.log("=" * 70, "header")
         
