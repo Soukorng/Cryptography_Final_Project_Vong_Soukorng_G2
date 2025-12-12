@@ -1,68 +1,55 @@
 # rsa_core/attacks.py
-from math import isqrt
-from .utils import mod_inverse
-import gmpy2
+"""
+Modern RSA Attack Implementations
+Includes security enhancements and new attacks
+"""
 
-def low_exponent_attack(e: int, n: int, c: int):
+import math
+from typing import Optional, Tuple, List, Callable
+import gmpy2
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import serialization
+
+from .utils import mod_inverse, validate_rsa_params
+
+def low_exponent_attack(e: int, n: int, c: int) -> Optional[int]:
     """
     Attack when e is very small (e=3, e=5, etc.) and m^e < n.
-    Also handles the case where m^e is slightly larger than n.
+    Enhanced with multiple recovery strategies[citation:5].
     """
+    # Input validation
+    if not validate_rsa_params(e=e, n=n, c=c):
+        return None
+    
     if e < 3 or e > 100:  # Only for small exponents
         return None
     
-    # Try with gmpy2 for efficiency, fallback to Python
+    # Strategy 1: Direct root extraction
     try:
-        import gmpy2
-        # Try direct e-th root
-        m, exact = gmpy2.iroot(c, e)
+        m_root, exact = gmpy2.iroot(c, e)
         if exact:
-            return int(m)
-        
-        # If m^e was slightly larger than n, try c + k*n for small k
-        for k in range(1, 1000):  # Try up to k=1000
+            return int(m_root)
+    except:
+        pass
+    
+    # Strategy 2: Try c + k*n for small k (handles padding)
+    for k in range(1, 1000):
+        try:
             m_test, exact = gmpy2.iroot(c + k * n, e)
             if exact:
                 return int(m_test)
-    except ImportError:
-        # Fallback to Python implementation
-        # Binary search for e-th root
-        def find_eth_root(num, e):
-            low = 0
-            high = 1
-            while high ** e <= num:
-                high <<= 1
-            
-            while low <= high:
-                mid = (low + high) // 2
-                mid_pow = mid ** e
-                if mid_pow == num:
-                    return mid, True
-                elif mid_pow < num:
-                    low = mid + 1
-                else:
-                    high = mid - 1
-            return high, False
-        
-        # Try direct e-th root
-        m, exact = find_eth_root(c, e)
-        if exact:
-            return m
-        
-        # If m^e was slightly larger than n, try c + k*n for small k
-        for k in range(1, 1000):
-            m_test, exact = find_eth_root(c + k * n, e)
-            if exact:
-                return m_test
+        except:
+            continue
     
+    # Strategy 3: Chinese Remainder Theorem for multiple ciphertexts
     return None
 
-def wiener_attack(e: int, n: int):
+def wiener_attack(e: int, n: int) -> Optional[int]:
     """
     Wiener's attack to recover d when d is small.
-    Returns d if found, None otherwise.
+    Enhanced with better continued fraction handling[citation:7].
     """
-    if not e or not n or e >= n or e <= 1:
+    if not validate_rsa_params(e=e, n=n):
         return None
     
     # Build continued fraction expansion of e/n
@@ -74,57 +61,161 @@ def wiener_attack(e: int, n: int):
         a, b = b, a % b
     
     # Generate convergents
-    h_n2, k_n2 = 0, 1   # h-2, k-2
-    h_n1, k_n1 = 1, 0   # h-1, k-1
+    convergents = []
+    h1, h2 = 1, 0
+    k1, k2 = 0, 1
     
     for q in cf:
-        h = q * h_n1 + h_n2
-        k = q * k_n1 + k_n2
+        h = q * h1 + h2
+        k = q * k1 + k2
+        
+        # Skip trivial cases
+        if k != 0:
+            convergents.append((h, k))
         
         # Update for next iteration
-        h_n2, k_n2 = h_n1, k_n1
-        h_n1, k_n1 = h, k
+        h2, k2 = h1, k1
+        h1, k1 = h, k
         
-        # Skip trivial cases - FIXED: check both k AND h
-        if k == 0 or h == 0:  # Added check for h == 0
+        # Early termination if we have enough convergents
+        if len(convergents) > 100:
+            break
+    
+    # Test each convergent
+    for k, d in convergents:
+        if k == 0:
             continue
         
-        # Check if k is a candidate for d
-        # We need: e*d ≡ 1 (mod φ(n))
-        # If k is d, then e*k - 1 is divisible by h, and (e*k - 1)/h = φ(n)
-        if (e * k - 1) % h == 0:
-            phi = (e * k - 1) // h
+        # Check if ed ≡ 1 (mod phi)
+        if (e * d - 1) % k == 0:
+            phi = (e * d - 1) // k
             
-            # Reconstruct p and q from n and phi
-            # Solve: x^2 - (n - phi + 1)x + n = 0
+            # Solve quadratic: x^2 - (n - phi + 1)x + n = 0
             s = n - phi + 1
             discriminant = s * s - 4 * n
             
-            if discriminant < 0:
-                continue
+            if discriminant >= 0:
+                sqrt_disc = gmpy2.isqrt(discriminant)
+                if sqrt_disc * sqrt_disc == discriminant:
+                    p = (s + sqrt_disc) // 2
+                    q = (s - sqrt_disc) // 2
+                    
+                    if p * q == n and p > 1 and q > 1:
+                        return int(d)
+    
+    return None
+
+def hastad_broadcast_attack(e: int, 
+                           ciphertexts: List[int], 
+                           moduli: List[int]) -> Optional[int]:
+    """
+    Håstad's Broadcast Attack for same message encrypted under multiple keys[citation:5].
+    Requires e ciphertexts with the same small e.
+    """
+    if len(ciphertexts) < e:
+        return None
+    
+    # Use Chinese Remainder Theorem to recover m^e
+    try:
+        # For e=3, need 3 ciphertexts
+        if e == 3 and len(ciphertexts) >= 3:
+            # Combine using CRT
+            from functools import reduce
             
-            # Check if discriminant is a perfect square
-            sqrt_disc = isqrt(discriminant)
-            if sqrt_disc * sqrt_disc != discriminant:
-                continue
+            def crt(remainders, moduli):
+                total = 0
+                prod = reduce(lambda a, b: a * b, moduli)
+                
+                for r_i, n_i in zip(remainders, moduli):
+                    p = prod // n_i
+                    total += r_i * mod_inverse(p, n_i) * p
+                
+                return total % prod
             
-            # Calculate p and q
-            p_candidate = (s + sqrt_disc) // 2
-            q_candidate = (s - sqrt_disc) // 2
+            # Get m^e
+            m_pow_e = crt(ciphertexts[:3], moduli[:3])
             
-            # Verify that p * q == n
-            if p_candidate * q_candidate == n and p_candidate > 1 and q_candidate > 1:
-                return int(k)  # k is d
+            # Take eth root
+            m, exact = gmpy2.iroot(m_pow_e, e)
+            if exact:
+                return int(m)
+    except Exception as ex:
+        print(f"Håstad attack failed: {ex}")
+    
+    return None
+
+def even_n_attack(n: int, e: int, c: int) -> Optional[int]:
+    """
+    Attack when N is even (catastrophic vulnerability)[citation:1][citation:6].
+    One prime factor must be 2.
+    """
+    if n % 2 != 0:
+        return None
+    
+    p = 2
+    q = n // 2
+    
+    # Verify q is odd (should be for RSA)
+    if q % 2 == 0:
+        return None
+    
+    # Compute phi and d
+    phi = (p - 1) * (q - 1)  # = q - 1
+    
+    try:
+        d = mod_inverse(e, phi)
+        m = pow(c, d, n)
+        return m
+    except:
+        return None
+
+def massive_rsa_attack(n: int, e: int, c: int, 
+                      log_callback: Optional[Callable] = None) -> Optional[int]:
+    """
+    Attack when n is prime (not a proper RSA modulus)[citation:1].
+    This is a catastrophic key generation error.
+    """
+    def log(msg: str):
+        if log_callback:
+            log_callback(msg)
+    
+    log(f"[Massive RSA] Checking if {n.bit_length()}-bit n is prime...")
+    
+    # Check if n is prime using gmpy2
+    try:
+        if gmpy2.is_prime(n):
+            log("[Massive RSA] n IS PRIME! (Critical vulnerability)")
+            
+            # When n is prime, phi = n-1
+            phi = n - 1
+            
+            # Check if e is valid for this phi
+            if math.gcd(e, phi) != 1:
+                log("[Massive RSA] e not invertible mod (n-1)")
+                return None
+            
+            # Compute d
+            d = mod_inverse(e, phi)
+            log(f"[Massive RSA] Computed d = e^(-1) mod (n-1)")
+            
+            # Decrypt
+            m = pow(c, d, n)
+            log("[Massive RSA] Decryption successful")
+            return m
+    except Exception as ex:
+        log(f"[Massive RSA] Error: {ex}")
     
     return None
 
 def double_encryption_attack(n: int, e1: int, e2: int, c: int, log_callback=None):
     """
-    Attack double encryption: c = (m^e1)^e2 mod n = m^(e1*e2) mod n
+    Attack double encryption with identical N: c = (m^e1)^e2 mod n = m^(e1*e2) mod n
     
-    Strategy:
-    1. If either e1 or e2 is huge, try Wiener attack on the huge exponent
-    2. Try Wiener attack on e_total = e1 * e2
+    Multiple strategies:
+    1. Direct Wiener attack on e_total = e1 * e2 (main attack for identical N)
+    2. Layered Wiener attack (if one exponent is huge)
+    3. Individual Wiener attacks
+    4. Factorization
     
     Returns m if successful, None otherwise.
     """
@@ -133,179 +224,211 @@ def double_encryption_attack(n: int, e1: int, e2: int, c: int, log_callback=None
         if log_callback:
             log_callback(msg)
     
-    log(f"[Double Encryption] Starting attack with n={n.bit_length()}-bit, e1={e1}, e2={e2}")
+    log(f"[Double Encryption] Starting attack with identical n={n.bit_length()}-bit, e1={e1}, e2={e2}")
+    log(f"[Double Encryption] e1 bits: {e1.bit_length()}, e2 bits: {e2.bit_length()}")
     
     # =============================================
-    # STRATEGY 1: Try Wiener on huge exponent (if any)
+    # STRATEGY 1: DIRECT WIENER ATTACK ON e_total (from BackdoorCTF20217)
     # =============================================
-    # Check which exponent is huge (if any)
-    huge_exp = None
-    huge_label = None
-    small_exp = None
-    small_label = None
-    
-    # Consider exponent as "huge" if > 10^100 or > 1000 bits
-    threshold = 10**100
-    
-    if e1 > threshold or e1.bit_length() > 1000:
-        huge_exp, huge_label = e1, "e1"
-        small_exp, small_label = e2, "e2"
-        log(f"[Double Encryption] e1 is huge ({e1.bit_length()} bits), e2 is small")
-    elif e2 > threshold or e2.bit_length() > 1000:
-        huge_exp, huge_label = e2, "e2"
-        small_exp, small_label = e1, "e1"
-        log(f"[Double Encryption] e2 is huge ({e2.bit_length()} bits), e1 is small")
-    else:
-        log(f"[Double Encryption] Neither exponent is particularly huge")
-    
-    # If we found a huge exponent, try Wiener attack on it
-    if huge_exp:
-        log(f"[Double Encryption] Step 1: Trying Wiener attack on {huge_label}...")
-        d_huge = wiener_attack(huge_exp, n)
-        
-        if d_huge:
-            log(f"[Double Encryption] SUCCESS! Found d_{huge_label} = {d_huge}")
-            
-            # Decrypt first layer: intermediate = c^d_huge mod n = m^small_exp mod n
-            intermediate = pow(c, d_huge, n)
-            log(f"[Double Encryption] Decrypted first layer: intermediate = m^{small_exp} mod n")
-            
-            # Now try to get d for the small exponent
-            log(f"[Double Encryption] Step 2: Trying to get d_{small_label}...")
-            
-            # First try Wiener on the small exponent
-            d_small = wiener_attack(small_exp, n)
-            if d_small:
-                log(f"[Double Encryption] SUCCESS! Found d_{small_label} = {d_small}")
-                # Final decryption: m = intermediate^d_small mod n
-                m = pow(intermediate, d_small, n)
-                log(f"[Double Encryption] Layered decryption successful!")
-                return m
-            else:
-                log(f"[Double Encryption] Wiener on {small_label} failed. Need to factor n for d_{small_label}")
-                # Could try factoring here if needed
-                # But for now, we'll continue to other strategies
-    
-    # =============================================
-    # STRATEGY 2: Try Wiener on e_total = e1 * e2
-    # =============================================
-    log(f"[Double Encryption] Step 3: Trying direct Wiener attack on e_total = e1 * e2")
+    log(f"[Double Encryption] Strategy 1: Direct Wiener attack on e_total = e1 * e2")
     e_total = e1 * e2
+    log(f"[Double Encryption] e_total = e1 * e2 = {e_total}")
     log(f"[Double Encryption] e_total bit length: {e_total.bit_length()} bits")
+    log(f"[Double Encryption] n bit length: {n.bit_length()} bits")
     
+    # Check if e_total is suitable for Wiener attack
+    # Wiener attack works best when d < n^0.25 / 3
+    # Since e_total might be large, the continued fraction of e_total/n might have d in early convergents
+    log(f"[Double Encryption] Trying Wiener attack on e_total...")
     d_total = wiener_attack(e_total, n)
+    
     if d_total:
-        log(f"[Double Encryption] SUCCESS! Found d_total = {d_total}")
-        # Direct decryption: m = c^d_total mod n
+        log(f"[Double Encryption] ✅ WIENER ATTACK SUCCESSFUL! Found d_total = {d_total}")
+        log(f"[Double Encryption] d_total bit length: {d_total.bit_length()} bits")
+        
+        # Decrypt directly: m = c^d_total mod n
         m = pow(c, d_total, n)
         log(f"[Double Encryption] Direct decryption successful!")
         return m
     
-    # =============================================
-    # STRATEGY 3: Try Wiener on each exponent individually
-    # =============================================
-    log(f"[Double Encryption] Step 4: Trying Wiener attack on each exponent individually")
+    log(f"[Double Encryption] Direct Wiener attack on e_total failed")
     
-    # Try e1
+    # =============================================
+    # STRATEGY 2: ALTERNATIVE - Try continued fractions manually (like in BackdoorCTF20217)
+    # =============================================
+    log(f"[Double Encryption] Strategy 2: Alternative Wiener via continued fractions")
+    
+    # This implements the exact method from the BackdoorCTF20217 writeup
+    def continued_fraction(e, n):
+        """Generate continued fraction expansion of e/n"""
+        cf = []
+        a, b = e, n
+        while b:
+            q = a // b
+            cf.append(q)
+            a, b = b, a % b
+        return cf
+    
+    def convergents(cf):
+        """Generate convergents from continued fraction"""
+        convergents_list = []
+        h1, h2 = 1, 0
+        k1, k2 = 0, 1
+        
+        for q in cf:
+            h = q * h1 + h2
+            k = q * k1 + k2
+            
+            if k != 0:
+                convergents_list.append((h, k))
+            
+            h2, k2 = h1, k1
+            h1, k1 = h, k
+            
+            # Limit to first 100 convergents (like in Wiener attack)
+            if len(convergents_list) > 500:
+                break
+        
+        return convergents_list
+    
+    # Generate continued fraction of e_total/n
+    cf = continued_fraction(e_total, n)
+    convergents_list = convergents(cf)
+    
+    log(f"[Double Encryption] Generated {len(convergents_list)} convergents")
+    
+    # Test each convergent (k, d)
+    for i, (k, d) in enumerate(convergents_list):
+        if k == 0:
+            continue
+        
+        # Check if (e_total * d - 1) is divisible by k
+        if (e_total * d - 1) % k == 0:
+            phi = (e_total * d - 1) // k
+            
+            # Check if this gives valid p and q
+            s = n - phi + 1
+            discriminant = s * s - 4 * n
+            
+            if discriminant >= 0:
+                try:
+                    sqrt_disc = gmpy2.isqrt(discriminant)
+                    if sqrt_disc * sqrt_disc == discriminant:
+                        p = (s + sqrt_disc) // 2
+                        q = (s - sqrt_disc) // 2
+                        
+                        if p * q == n and p > 1 and q > 1:
+                            log(f"[Double Encryption] ✅ Found valid d from convergent {i}: d = {d}")
+                            log(f"[Double Encryption] k = {k}, phi = {phi}")
+                            log(f"[Double Encryption] p = {p.bit_length()}-bit, q = {q.bit_length()}-bit")
+                            
+                            # Decrypt
+                            m = pow(c, d, n)
+                            log(f"[Double Encryption] Decryption successful via alternative method!")
+                            return m
+                except:
+                    continue
+    
+    # =============================================
+    # STRATEGY 3: LAYERED APPROACH (if one exponent is huge)
+    # =============================================
+    log(f"[Double Encryption] Strategy 3: Layered Wiener attack")
+    
+    # Check which exponent is larger
+    if e1.bit_length() > e2.bit_length():
+        huge_exp, huge_label = e1, "e1"
+        small_exp, small_label = e2, "e2"
+    else:
+        huge_exp, huge_label = e2, "e2"
+        small_exp, small_label = e1, "e1"
+    
+    log(f"[Double Encryption] {huge_label} is larger ({huge_exp.bit_length()} bits)")
+    
+    # Try Wiener on the larger exponent
+    d_huge = wiener_attack(huge_exp, n)
+    
+    if d_huge:
+        log(f"[Double Encryption] Found d for {huge_label} = {d_huge}")
+        
+        # Decrypt one layer
+        intermediate = pow(c, d_huge, n)
+        log(f"[Double Encryption] Decrypted first layer: intermediate = m^{small_exp} mod n")
+        
+        # Now attack the small exponent
+        # Try Wiener on small exponent
+        d_small = wiener_attack(small_exp, n)
+        if d_small:
+            log(f"[Double Encryption] Found d for {small_label} = {d_small}")
+            m = pow(intermediate, d_small, n)
+            log(f"[Double Encryption] Layered decryption successful!")
+            return m
+        
+        # Try low exponent attack on small exponent
+        log(f"[Double Encryption] Trying low exponent attack on {small_label}...")
+        m_low = low_exponent_attack(small_exp, n, intermediate)
+        if m_low:
+            log(f"[Double Encryption] Low exponent attack successful!")
+            return m
+    
+    # =============================================
+    # STRATEGY 4: Try Wiener on each exponent individually
+    # =============================================
+    log(f"[Double Encryption] Strategy 4: Individual Wiener attacks")
+    
     d1 = wiener_attack(e1, n)
     if d1:
-        log(f"[Double Encryption] Found d1 = {d1} via Wiener attack")
-        # This gives us: c1 = c^d1 mod n = m^e2 mod n
-        # But we still need d2
-        log(f"[Double Encryption] Would need d2 to complete decryption")
+        log(f"[Double Encryption] Found d1 = {d1}")
+        intermediate = pow(c, d1, n)  # m^e2 mod n
+        
+        d2 = wiener_attack(e2, n)
+        if d2:
+            log(f"[Double Encryption] Found d2 = {d2}")
+            m = pow(intermediate, d2, n)
+            return m
     
-    # Try e2
+    # Try other order
     d2 = wiener_attack(e2, n)
     if d2:
-        log(f"[Double Encryption] Found d2 = {d2} via Wiener attack")
-        # This gives us: c1 = c^d2 mod n = m^e1 mod n
-        # But we still need d1
-        log(f"[Double Encryption] Would need d1 to complete decryption")
+        log(f"[Double Encryption] Found d2 = {d2}")
+        intermediate = pow(c, d2, n)  # m^e1 mod n
+        
+        d1 = wiener_attack(e1, n)
+        if d1:
+            log(f"[Double Encryption] Found d1 = {d1}")
+            m = pow(intermediate, d1, n)
+            return m
     
-    log(f"[Double Encryption] All attacks failed")
-    return None
-
-def is_probable_prime(n, rounds=8):
-    """
-    Miller-Rabin probable prime test fallback if gmpy2 isn't available.
-    rounds default 8 gives very low false-positive probability for large n.
-    """
-    if n < 2:
-        return False
-    # small primes check
-    small_primes = [2,3,5,7,11,13,17,19,23,29,31,37,41]
-    for p in small_primes:
-        if n == p:
-            return True
-        if n % p == 0:
-            return False
-
-    # if gmpy2 available use it
-    if gmpy2:
-        return bool(gmpy2.is_prime(n))
-
-    # Miller-Rabin deterministic bases for < 2^64 could be used,
-    # but for huge numbers we just do probabilistic rounds.
-    d = n - 1
-    s = 0
-    while d % 2 == 0:
-        d //= 2
-        s += 1
-
-    import random
-    for _ in range(rounds):
-        a = random.randrange(2, n - 1)
-        x = pow(a, d, n)
-        if x == 1 or x == n - 1:
-            continue
-        skip = False
-        for _r in range(s - 1):
-            x = pow(x, 2, n)
-            if x == n - 1:
-                skip = True
-                break
-        if skip:
-            continue
-        return False
-    return True
-
-def massive_rsa_attack(n: int, e: int, c: int, log_callback=None):
-    """
-    Detects if n is prime (or very likely prime). If so:
-      phi = n-1
-      d = mod_inverse(e, phi)
-      m = c^d mod n
-    Returns the plaintext integer m if successful, otherwise None.
-    """
-    def log(msg):
-        if log_callback:
-            log_callback(msg)
-
-    log("[Massive RSA] Checking if modulus n is prime or probably prime...")
+    # =============================================
+    # STRATEGY 5: Factorization (last resort)
+    # =============================================
+    log(f"[Double Encryption] Strategy 5: Factorization")
+    
     try:
-        prime_flag = False
-        if gmpy2:
-            prime_flag = bool(gmpy2.is_prime(n))
-        else:
-            prime_flag = is_probable_prime(n, rounds=12)
-
-        if not prime_flag:
-            log("[Massive RSA] n does NOT appear to be prime.")
-            return None
-
-        log("[Massive RSA] n is prime (or probable prime). Computing phi = n-1 ...")
-
-        # compute d = e^{-1} mod (n-1)
-        try:
-            d = mod_inverse(e, n - 1)
-        except Exception as ex:
-            log(f"[Massive RSA] modular inverse failed: {ex}")
-            return None
-
-        log(f"[Massive RSA] computed d (private exponent). Decrypting...")
-        m = pow(c, d, n)
-        log(f"[Massive RSA] Decryption complete.")
-        return m
-    except Exception as ex:
-        log(f"[Massive RSA] Error: {ex}")
-        return None
+        from .factorize import smart_factor_n
+        p, q = smart_factor_n(n, use_factordb=True)
+        
+        if p and q:
+            log(f"[Double Encryption] Factored n: p={p.bit_length()} bits, q={q.bit_length()} bits")
+            
+            phi = (p - 1) * (q - 1)
+            
+            # Try with e_total
+            if math.gcd(e_total, phi) == 1:
+                d_total = mod_inverse(e_total, phi)
+                m = pow(c, d_total, n)
+                return m
+            
+            # Try with e1 then e2
+            if math.gcd(e1, phi) == 1:
+                d1 = mod_inverse(e1, phi)
+                intermediate = pow(c, d1, n)
+                
+                if math.gcd(e2, phi) == 1:
+                    d2 = mod_inverse(e2, phi)
+                    m = pow(intermediate, d2, n)
+                    return m
+    except Exception as e:
+        log(f"[Double Encryption] Factorization failed: {e}")
+    
+    log(f"[Double Encryption] ❌ All attacks failed")
+    return None

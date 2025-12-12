@@ -1,22 +1,25 @@
-# gui/app.py
+# gui/app.py - Modern RSA Cracker with Dark Blue Theme
 import threading
 import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
+from tkinter import ttk, messagebox, scrolledtext, filedialog
 import time
 import traceback
 import sys
 import os
+from datetime import datetime
+import json
 
 # Add the rsa_core directory to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'rsa_core'))
 
-# Now import from rsa_core
+# Import from rsa_core
 try:
     from rsa_core import (
         int_to_bytes, bytes_to_hex, try_decode,
         rsa_decrypt, compute_d, smart_factor_n,
         wiener_attack, low_exponent_attack, rsa_crt_decrypt,
-        double_encryption_attack, massive_rsa_attack
+        double_encryption_attack, massive_rsa_attack,
+        hastad_broadcast_attack, compute_d_from_phi
     )
 except ImportError as e:
     print(f"Import Error: {e}")
@@ -26,411 +29,892 @@ except ImportError as e:
 class RSACracker:
     def __init__(self, root):
         self.root = root
-        self.root.title("CTF RSA Cracker Pro 2025")
-        self.root.geometry("1200x960")
-        self.root.configure(bg="#0d1117")
-
-        self.stop_flag = False
-        self.start_time = None
-
+        self.root.title("RSA CRACKER TOOL")
+        self.root.geometry("1200x900")
+        
+        # Secure dark blue color scheme
+        self.colors = {
+            'bg': '#0f172a',          # Dark blue background
+            'card_bg': '#1e293b',     # Card background
+            'text': '#e2e8f0',        # Light text
+            'accent': '#0ea5e9',      # Cyan accent
+            'success': '#10b981',     # Green success
+            'warning': '#f59e0b',     # Amber warning
+            'error': '#ef4444',       # Red error
+            'input_bg': '#0f172a',    # Input background
+            'input_fg': '#ffffff',    # Input text
+            'button_bg': '#0ea5e9',   # Cyan button
+            'button_fg': '#ffffff',   # Button text
+            'border': '#334155',      # Border color
+        }
+        
+        # Configure window
+        self.root.configure(bg=self.colors['bg'])
+        
+        # Configure ttk style
         self.style = ttk.Style()
         self.style.theme_use('clam')
-        self.create_ui()
-
-    def create_ui(self):
-        main = tk.Frame(self.root, bg="#0d1117")
-        main.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
-
-        # Labels
-        labels = ["e (public exponent)", "e1 (public exponent 1)", "e2 (public exponent 2)",
-                  "n (modulus)", 
-                  "c (ciphertext)", "c1 (ciphertext 1)", "c2 (ciphertext 2)",
-                  "p (prime 1)", "q (prime 2)", "d (private key)",
-                  "dp (d mod p-1)", "dq (d mod q-1)"]
-
+        self.configure_styles()
+        
+        # Initialize variables
+        self.stop_flag = False
+        self.start_time = None
         self.entries = {}
-        for i, text in enumerate(labels):
-            tk.Label(main, text=text + ":", bg="#0d1117", fg="#58a6ff",
-                    font=("Consolas", 11)).grid(row=i, column=0, sticky="e", pady=6, padx=5)
+        self.dynamic_fields = {}
+        self.results_history = []
+        
+        # Load saved values if any
+        self.saved_values_file = os.path.join(os.path.dirname(__file__), '..', 'saved_values.json')
+        
+        self.create_modern_ui()
+        self.load_saved_values()
 
-            entry = tk.Entry(main, width=90, font=("Consolas", 10),
-                            bg="#161b22", fg="#f0f6fc", insertbackground="white")
-            entry.grid(row=i, column=1, pady=6, padx=5)
+    def configure_styles(self):
+        """Configure ttk styles for modern dark theme"""
+        # Configure frame styles
+        self.style.configure('Card.TFrame',
+                           background=self.colors['card_bg'],
+                           borderwidth=1,
+                           relief='solid')
+        
+        # Configure label styles
+        self.style.configure('Title.TLabel',
+                           background=self.colors['bg'],
+                           foreground=self.colors['accent'])
+        
+        self.style.configure('Subtitle.TLabel',
+                           background=self.colors['bg'],
+                           foreground=self.colors['text'])
+        
+        # Configure button styles
+        self.style.configure('Crack.TButton',
+                           background=self.colors['button_bg'],
+                           foreground=self.colors['button_fg'],
+                           borderwidth=0)
+        
+        self.style.map('Crack.TButton',
+                      background=[('active', '#0284c7')])
+        
+        self.style.configure('Action.TButton',
+                           background='#475569',
+                           foreground='white',
+                           borderwidth=0)
+        
+        # Configure scrollbar
+        self.style.configure('Custom.Vertical.TScrollbar',
+                           background='#334155',
+                           darkcolor='#334155',
+                           lightcolor='#334155',
+                           troughcolor=self.colors['card_bg'],
+                           bordercolor=self.colors['card_bg'],
+                           arrowcolor=self.colors['text'])
 
-            self.entries[text.split()[0].lower() if '(' not in text else text.split()[0]] = entry
+    def create_modern_ui(self):
+        """Create the modern dark-themed GUI"""
+        # Main container with two equal halves
+        main_container = ttk.Frame(self.root)
+        main_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        # Create two equal columns
+        main_container.columnconfigure(0, weight=1)  # Left column (Input)
+        main_container.columnconfigure(1, weight=1)  # Right column (Results)
+        main_container.rowconfigure(0, weight=1)
+        
+        # =================== LEFT COLUMN - INPUT ===================
+        left_container = ttk.Frame(main_container, style='Card.TFrame')
+        left_container.grid(row=0, column=0, sticky='nsew', padx=(0, 10))
+        
+        # Header for input section
+        input_header = ttk.Frame(left_container, style='Card.TFrame')
+        input_header.pack(fill=tk.X, padx=20, pady=(20, 10))
+        
+        input_title = tk.Label(input_header,
+                             text="🔧 INPUT PARAMETERS",
+                             bg=self.colors['card_bg'],
+                             fg=self.colors['accent'],
+                             font=('Arial', 14, 'bold'))
+        input_title.pack(side=tk.LEFT)
+        
+        # Create scrollable input area
+        input_canvas = tk.Canvas(left_container,
+                                bg=self.colors['card_bg'],
+                                highlightthickness=0)
+        input_scrollbar = ttk.Scrollbar(left_container,
+                                       orient='vertical',
+                                       command=input_canvas.yview,
+                                       style='Custom.Vertical.TScrollbar')
+        input_scrollable_frame = ttk.Frame(input_canvas, style='Card.TFrame')
+        
+        input_scrollable_frame.bind(
+            "<Configure>",
+            lambda e: input_canvas.configure(scrollregion=input_canvas.bbox("all"))
+        )
+        
+        canvas_window = input_canvas.create_window((0, 0),
+                                                  window=input_scrollable_frame,
+                                                  anchor="nw")
+        
+        def configure_canvas(event):
+            input_canvas.itemconfig(canvas_window, width=event.width)
+        
+        input_canvas.bind('<Configure>', configure_canvas)
+        input_canvas.configure(yscrollcommand=input_scrollbar.set)
+        
+        # Pack canvas and scrollbar
+        input_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=20, pady=(0, 20))
+        input_scrollbar.pack(side=tk.RIGHT, fill=tk.Y, pady=(0, 20))
+        
+        # Create input fields in scrollable frame
+        self.create_input_fields(input_scrollable_frame)
+        
+        # =================== ACTION BUTTONS ===================
+        # Create a separate frame for action buttons at the bottom of left column
+        action_frame = ttk.Frame(left_container, style='Card.TFrame')
+        action_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=20, pady=(0, 20))
+        
+        # CRACK button (cyan)
+        self.btn_crack = tk.Button(action_frame,
+                                 text="🚀 CRACK RSA",
+                                 command=self.start_crack,
+                                 bg=self.colors['button_bg'],
+                                 fg=self.colors['button_fg'],
+                                 font=('Arial', 12, 'bold'),
+                                 padx=30,
+                                 pady=15,
+                                 bd=0,
+                                 relief='flat',
+                                 cursor='hand2')
+        self.btn_crack.pack(side=tk.LEFT, padx=(0, 10), pady=10)
+        
+        # Clear button
+        btn_clear = tk.Button(action_frame,
+                            text="🗑️ Clear All",
+                            command=self.clear_all,
+                            bg='#475569',
+                            fg='white',
+                            font=('Arial', 10),
+                            padx=20,
+                            pady=10,
+                            bd=0,
+                            relief='flat',
+                            cursor='hand2')
+        btn_clear.pack(side=tk.LEFT, padx=5, pady=10)
+        
+        # Save Values button
+        btn_save_vals = tk.Button(action_frame,
+                                text="💾 Save Values",
+                                command=self.save_values,
+                                bg='#475569',
+                                fg='white',
+                                font=('Arial', 10),
+                                padx=20,
+                                pady=10,
+                                bd=0,
+                                relief='flat',
+                                cursor='hand2')
+        btn_save_vals.pack(side=tk.LEFT, padx=5, pady=10)
+        
+        # =================== RIGHT COLUMN - RESULTS ===================
+        right_container = ttk.Frame(main_container, style='Card.TFrame')
+        right_container.grid(row=0, column=1, sticky='nsew', padx=(10, 0))
+        
+        # Header for results section
+        results_header = ttk.Frame(right_container, style='Card.TFrame')
+        results_header.pack(fill=tk.X, padx=20, pady=(20, 10))
+        
+        results_title = tk.Label(results_header,
+                               text="📊 RESULTS",
+                               bg=self.colors['card_bg'],
+                               fg=self.colors['accent'],
+                               font=('Arial', 14, 'bold'))
+        results_title.pack(side=tk.LEFT)
+        
+        # Results action buttons
+        results_actions = tk.Frame(results_header, bg=self.colors['card_bg'])
+        results_actions.pack(side=tk.RIGHT)
+        
+        self.btn_copy = tk.Button(results_actions,
+                                text="📋 Copy",
+                                command=self.copy_results,
+                                bg='#3498db',
+                                fg='white',
+                                font=('Arial', 10),
+                                padx=15,
+                                pady=5,
+                                bd=0,
+                                relief='flat',
+                                cursor='hand2',
+                                state='disabled')
+        self.btn_copy.pack(side=tk.LEFT, padx=2)
+        
+        self.btn_save = tk.Button(results_actions,
+                                text="💾 Save",
+                                command=self.save_results,
+                                bg='#9b59b6',
+                                fg='white',
+                                font=('Arial', 10),
+                                padx=15,
+                                pady=5,
+                                bd=0,
+                                relief='flat',
+                                cursor='hand2',
+                                state='disabled')
+        self.btn_save.pack(side=tk.LEFT, padx=2)
+        
+        self.btn_history = tk.Button(results_actions,
+                                   text="📜 History",
+                                   command=self.show_history,
+                                   bg='#475569',
+                                   fg='white',
+                                   font=('Arial', 10),
+                                   padx=15,
+                                   pady=5,
+                                   bd=0,
+                                   relief='flat',
+                                   cursor='hand2')
+        self.btn_history.pack(side=tk.LEFT, padx=2)
+        
+        # Results text area
+        results_text_frame = ttk.Frame(right_container, style='Card.TFrame')
+        results_text_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 20))
+        
+        # Create custom text widget with scrollbar
+        text_frame = tk.Frame(results_text_frame, bg=self.colors['input_bg'])
+        text_frame.pack(fill=tk.BOTH, expand=True)
+        
+        self.results_text = tk.Text(text_frame,
+                                   wrap=tk.WORD,
+                                   font=('Consolas', 10),
+                                   bg=self.colors['input_bg'],
+                                   fg=self.colors['input_fg'],
+                                   insertbackground=self.colors['accent'],
+                                   relief='flat',
+                                   padx=15,
+                                   pady=15)
+        
+        text_scrollbar = ttk.Scrollbar(text_frame,
+                                      orient='vertical',
+                                      command=self.results_text.yview,
+                                      style='Custom.Vertical.TScrollbar')
+        
+        self.results_text.configure(yscrollcommand=text_scrollbar.set)
+        
+        self.results_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        text_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Configure text tags - UPDATED: Added ascii_red tag
+        self.results_text.tag_config("success", foreground=self.colors['success'], font=('Consolas', 10, 'bold'))
+        self.results_text.tag_config("error", foreground=self.colors['error'])
+        self.results_text.tag_config("warning", foreground=self.colors['warning'])
+        self.results_text.tag_config("flag", foreground=self.colors['accent'], font=('Consolas', 12, 'bold'))
+        self.results_text.tag_config("header", font=('Consolas', 11, 'bold'))
+        self.results_text.tag_config("param", foreground='#94a3b8')
+        self.results_text.tag_config("ascii_red", foreground='#ff6b6b', font=('Consolas', 10, 'bold'))  # Red for ASCII
+        self.results_text.tag_config("history_result", foreground='#f8a5c2', font=('Consolas', 10))  # Pink color
+        
+        # Status bar at bottom of main window
+        status_frame = ttk.Frame(main_container, style='Card.TFrame')
+        status_frame.grid(row=1, column=0, columnspan=2, sticky='ew', pady=(10, 0))
+        
+        self.status_label = tk.Label(status_frame,
+                                   text="Ready",
+                                   bg=self.colors['card_bg'],
+                                   fg=self.colors['text'],
+                                   font=('Arial', 9))
+        self.status_label.pack(side=tk.LEFT, padx=20, pady=10)
+        
+        self.time_label = tk.Label(status_frame,
+                                 text="",
+                                 bg=self.colors['card_bg'],
+                                 fg=self.colors['text'],
+                                 font=('Consolas', 9))
+        self.time_label.pack(side=tk.RIGHT, padx=20, pady=10)
 
-        # Status
-        self.status = tk.StringVar(value="Ready")
-        tk.Label(main, textvariable=self.status, bg="#0d1117",
-                fg="#79c0ff", font=("Consolas", 10))\
-            .grid(row=14, column=0, columnspan=2, sticky="we", pady=10)
+    def create_input_fields(self, parent):
+        """Create input fields with dynamic expansion"""
+        # Define main fields and their additional fields
+        field_groups = [
+            {
+                'base': 'e',
+                'label': 'Public Exponent (e)',
+                'add_fields': ['e1', 'e2'],
+                'has_add_button': True
+            },
+            {
+                'base': 'n', 
+                'label': 'Modulus (n)',
+                'add_fields': [],
+                'has_add_button': False
+            },
+            {
+                'base': 'c',
+                'label': 'Ciphertext (c)',
+                'add_fields': ['c1', 'c2', 'c3'],
+                'has_add_button': True
+            },
+            {
+                'base': 'p',
+                'label': 'Prime p',
+                'add_fields': [],
+                'has_add_button': False
+            },
+            {
+                'base': 'q',
+                'label': 'Prime q', 
+                'add_fields': [],
+                'has_add_button': False
+            },
+            {
+                'base': 'd',
+                'label': 'Private Key (d)',
+                'add_fields': ['dp', 'dq'],
+                'has_add_button': True
+            }
+        ]
+        
+        for i, group in enumerate(field_groups):
+            # Create frame for each field group
+            field_frame = ttk.Frame(parent, style='Card.TFrame')
+            field_frame.pack(fill=tk.X, padx=10, pady=8)
+            
+            # Main field
+            self.create_field_row(field_frame, group['base'], group['label'], group)
+            
+            # Store dynamic fields info
+            if group['add_fields']:
+                self.dynamic_fields[group['base']] = {
+                    'available': group['add_fields'].copy(),
+                    'added': [],
+                    'frame': field_frame
+                }
 
-        # Buttons
-        btns = tk.Frame(main, bg="#0d1117")
-        btns.grid(row=15, column=0, columnspan=2, pady=15)
+    def create_field_row(self, parent, field_name, label, group):
+        """Create a single field row with label and entry"""
+        # Create a frame to hold everything
+        row_frame = tk.Frame(parent, bg=self.colors['card_bg'])
+        row_frame.pack(fill=tk.X, padx=(0, 10))
+        
+        # Label (left side)
+        lbl_frame = tk.Frame(row_frame, bg=self.colors['card_bg'])
+        lbl_frame.pack(side=tk.LEFT, padx=(10, 5))
+        
+        lbl = tk.Label(lbl_frame,
+                      text=label + ":",
+                      bg=self.colors['card_bg'],
+                      fg=self.colors['text'],
+                      font=('Arial', 10, 'bold'),
+                      anchor='w',
+                      width=20)
+        lbl.pack(anchor='w')
+        
+        # Entry field with rounded corners (center)
+        entry_frame = tk.Frame(row_frame,
+                              bg=self.colors['input_bg'],
+                              highlightbackground=self.colors['border'],
+                              highlightthickness=2)
+        entry_frame.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+        
+        entry = tk.Entry(entry_frame,
+                        font=('Consolas', 10),
+                        bg=self.colors['input_bg'],
+                        fg=self.colors['input_fg'],
+                        insertbackground=self.colors['accent'],
+                        relief='flat',
+                        bd=0)
+        entry.pack(fill=tk.BOTH, padx=12, pady=8, ipady=4)
+        
+        self.entries[field_name] = entry
+        
+        # Add button for fields with additional options (right side)
+        if group['has_add_button']:
+            btn_frame = tk.Frame(row_frame, bg=self.colors['card_bg'])
+            btn_frame.pack(side=tk.RIGHT, padx=(0, 5))
+            
+            add_btn = tk.Button(btn_frame,
+                              text="+ Add",
+                              command=lambda f=field_name, g=group: self.add_dynamic_field(f, g),
+                              bg=self.colors['accent'],
+                              fg='white',
+                              font=('Arial', 9, 'bold'),
+                              padx=12,
+                              pady=4,
+                              bd=0,
+                              relief='flat',
+                              cursor='hand2')
+            add_btn.pack()
 
-        self.btn_crack = tk.Button(btns, text="CRACK RSA",
-                                command=self.start_crack,
-                                bg="#238636", fg="white",
-                                font=("Arial", 14, "bold"), width=20, height=2)
-        self.btn_crack.pack(side="left", padx=10)
+    def add_dynamic_field(self, base_field, group):
+        """Add a dynamic field below the base field"""
+        if not self.dynamic_fields[base_field]['available']:
+            return
+        
+        # Get next available field
+        field_name = self.dynamic_fields[base_field]['available'].pop(0)
+        
+        # Create the dynamic field
+        dynamic_frame = tk.Frame(self.dynamic_fields[base_field]['frame'], bg=self.colors['card_bg'])
+        dynamic_frame.pack(fill=tk.X, padx=(40, 10), pady=(5, 0))  # Indented
+        
+        # Label (indented)
+        lbl_frame = tk.Frame(dynamic_frame, bg=self.colors['card_bg'])
+        lbl_frame.pack(side=tk.LEFT, padx=(0, 5))
+        
+        lbl = tk.Label(lbl_frame,
+                      text=f"{field_name}:",
+                      bg=self.colors['card_bg'],
+                      fg=self.colors['text'],
+                      font=('Arial', 9),
+                      anchor='w',
+                      width=18)
+        lbl.pack(anchor='w')
+        
+        # Entry
+        entry_frame = tk.Frame(dynamic_frame,
+                              bg=self.colors['input_bg'],
+                              highlightbackground='#475569',
+                              highlightthickness=1)
+        entry_frame.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+        
+        entry = tk.Entry(entry_frame,
+                        font=('Consolas', 9),
+                        bg=self.colors['input_bg'],
+                        fg=self.colors['input_fg'],
+                        insertbackground=self.colors['accent'],
+                        relief='flat',
+                        bd=0)
+        entry.pack(fill=tk.BOTH, padx=10, pady=6, ipady=3)
+        
+        # Remove button (X)
+        remove_btn = tk.Button(dynamic_frame,
+                             text="×",
+                             command=lambda f=field_name, df=dynamic_frame: self.remove_dynamic_field(f, df),
+                             bg='#475569',
+                             fg='white',
+                             font=('Arial', 9, 'bold'),
+                             padx=8,
+                             pady=0,
+                             bd=0,
+                             relief='flat',
+                             cursor='hand2')
+        remove_btn.pack(side=tk.RIGHT, padx=(5, 0))
+        
+        # Store the entry
+        self.entries[field_name] = entry
+        self.dynamic_fields[base_field]['added'].append({
+            'name': field_name,
+            'frame': dynamic_frame,
+            'entry': entry
+        })
 
-        tk.Button(btns, text="Clear", command=self.clear,
-                bg="#da3633", fg="white").pack(side="left", padx=10)
+    def remove_dynamic_field(self, field_name, frame):
+        """Remove a dynamic field"""
+        # Find which base field this belongs to
+        for base_field, data in self.dynamic_fields.items():
+            for idx, field_data in enumerate(data['added']):
+                if field_data['name'] == field_name:
+                    # Destroy the frame
+                    frame.destroy()
+                    
+                    # Remove from entries
+                    if field_name in self.entries:
+                        del self.entries[field_name]
+                    
+                    # Remove from added list and add back to available
+                    data['added'].pop(idx)
+                    data['available'].insert(0, field_name)
+                    return
 
-        # Output box
-        out = tk.LabelFrame(self.root, text=" Output & Flag ",
-                            font=("Arial", 14, "bold"),
-                            bg="#0d1117", fg="#ffa657")
-        out.pack(fill=tk.BOTH, expand=True, padx=15, pady=(0, 15))
-
-        self.logbox = scrolledtext.ScrolledText(out, font=("Consolas", 11),
-                                                bg="#0d1117", fg="#f0f6fc")
-        self.logbox.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-        self.logbox.tag_config("green", foreground="#00ff00")
-        self.logbox.tag_config("red", foreground="#ff5555", font=("Consolas", 16, "bold"))
-        self.logbox.tag_config("done", foreground="#00ff88", font=("Consolas", 14, "bold"))
-
-    def get(self, k):
-        v = self.entries[k].get().strip()
-        return int(v, 0) if v else None
+    def get(self, key):
+        """Safely get and convert input values"""
+        if key not in self.entries:
+            return None
+        
+        v = self.entries[key].get().strip()
+        if not v:
+            return None
+        
+        # Remove any whitespace and newlines
+        v = v.replace('\n', '').replace('\r', '').replace(' ', '')
+        
+        try:
+            # Handle hex (0x), binary (0b), and decimal
+            return int(v, 0)
+        except ValueError as e:
+            self.log(f"Invalid input for {key}: '{v}' - {str(e)}", "error")
+            return None
 
     def log(self, msg, tag=None):
+        """Thread-safe logging with timestamp"""
         if self.stop_flag:
             return
-        self.logbox.insert("end", msg + "\n", tag)
-        self.logbox.see("end")
-        self.root.update_idletasks()
+        
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        formatted_msg = f"[{timestamp}] {msg}"
+        
+        self.root.after(0, self._safe_log, formatted_msg, tag)
 
-    def clear(self):
+    def _safe_log(self, msg, tag):
+        """Safe logging from main thread"""
+        self.results_text.insert("end", msg + "\n", tag)
+        self.results_text.see("end")
+        
+        # Enable action buttons
+        self.btn_copy.config(state='normal')
+        self.btn_save.config(state='normal')
+
+    def clear_all(self):
+        """Clear all inputs and results"""
         self.stop_flag = True
-        self.btn_crack.config(state="normal", text="CRACK RSA")
-        self.logbox.delete(1.0, "end")
-
-        for e in self.entries.values():
-            e.delete(0, "end")
-
-        self.status.set("Ready")
-        self.start_time = None
+        
+        # Clear all entry fields
+        for entry in self.entries.values():
+            if isinstance(entry, tk.Entry):
+                entry.delete(0, tk.END)
+        
+        # Clear results
+        self.results_text.delete(1.0, tk.END)
+        
+        # Remove all dynamic fields
+        for base_field in list(self.dynamic_fields.keys()):
+            for field_data in self.dynamic_fields[base_field]['added'][:]:
+                self.remove_dynamic_field(field_data['name'], field_data['frame'])
+        
+        # Reset status
+        self.status_label.config(text="Ready")
+        self.time_label.config(text="")
+        self.btn_crack.config(state='normal', text="🚀 CRACK RSA")
+        self.btn_copy.config(state='disabled')
+        self.btn_save.config(state='disabled')
+        self.stop_flag = False
 
     def start_crack(self):
+        """Start the cracking process"""
+        if self.stop_flag:
+            return
+        
         self.stop_flag = False
-        self.logbox.delete(1.0, "end")
-
-        self.log("RSA Cracker Pro Started... (background thread)", "green")
-        self.btn_crack.config(state="disabled", text="WORKING...")
-
-        self.status.set("Running... 0.0s")
+        self.results_text.delete(1.0, tk.END)
         self.start_time = time.time()
-
+        
+        self.log("=" * 70, "header")
+        self.log("RSA CRACKER TOOL", "header")
+        self.log("=" * 70, "header")
+        self.log(f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        self.log("")
+        
+        self.btn_crack.config(state='disabled', text="⏳ PROCESSING...")
+        self.status_label.config(text="Running attacks...")
+        
+        # Start cracking in separate thread
         threading.Thread(target=self.crack_thread, daemon=True).start()
         threading.Thread(target=self.timer_thread, daemon=True).start()
 
     def timer_thread(self):
+        """Update timer in status bar"""
         while not self.stop_flag and self.btn_crack["state"] == "disabled":
             elapsed = time.time() - self.start_time
             m, s = divmod(elapsed, 60)
-            self.status.set(f"Running... {int(m)}m {s:.1f}s")
+            h, m = divmod(m, 60)
+            
+            if h > 0:
+                time_str = f"{int(h)}h {int(m)}m {s:.1f}s"
+            elif m > 0:
+                time_str = f"{int(m)}m {s:.1f}s"
+            else:
+                time_str = f"{s:.1f}s"
+            
+            self.root.after(0, self.time_label.config, {'text': f"Elapsed: {time_str}"})
             time.sleep(0.1)
 
-        if self.stop_flag:
-            self.status.set("Stopped")
-        else:
-            elapsed = time.time() - self.start_time
-            m, s = divmod(elapsed, 60)
-            self.status.set(f"Finished in {int(m)}m {s:.1f}s")
-
-    # gui/app.py - Update the crack_thread method for better factoring
     def crack_thread(self):
+        """Main cracking logic - SECURE VERSION"""
         try:
-            if self.stop_flag:
-                return
-
-            # Get all values from UI
-            e = self.get("e")
-            e1 = self.get("e1")
-            e2 = self.get("e2")
-            n = self.get("n")
-            c = self.get("c")
-            c1 = self.get("c1")
-            c2 = self.get("c2")
-            p = self.get("p")
-            q = self.get("q")
-            d = self.get("d")
-            dp = self.get("dp")
-            dq = self.get("dq")
+            # Collect all parameters with validation
+            params = {}
+            param_keys = ['e', 'e1', 'e2', 'n', 'c', 'c1', 'c2', 'c3', 'p', 'q', 'd', 'dp', 'dq']
             
-            m = None  # Initialize m for decrypted message
+            for key in param_keys:
+                value = self.get(key)
+                if value is not None:
+                    params[key] = value
             
-            # =============================================
-            # 1. DETERMINE WHICH EXPONENTS WE HAVE
-            # =============================================
-            exponents = []
-            exp_labels = []
+            # Log collected parameters
+            self.log("📋 INPUT PARAMETERS:", "header")
+            for key, value in params.items():
+                if value is not None:
+                    bits = value.bit_length() if value > 0 else 0
+                    self.log(f"  {key:>3} = {value} ({bits} bits)", "param")
             
-            if e is not None:
-                exponents.append(e)
-                exp_labels.append("e")
-            if e1 is not None:
-                exponents.append(e1)
-                exp_labels.append("e1")
-            if e2 is not None:
-                exponents.append(e2)
-                exp_labels.append("e2")
+            self.log("")
             
-            # =============================================
-            # 2. DETERMINE WHICH CIPHERTEXT TO USE
-            # =============================================
-            ciphertexts = []
-            cipher_labels = []
+            # Extract values
+            e = params.get('e')
+            e1 = params.get('e1')
+            e2 = params.get('e2')
+            n = params.get('n')
+            c = params.get('c')
+            c1 = params.get('c1')
+            c2 = params.get('c2')
+            c3 = params.get('c3')
+            p = params.get('p')
+            q = params.get('q')
+            d = params.get('d')
+            dp = params.get('dp')
+            dq = params.get('dq')
             
-            if c is not None:
-                ciphertexts.append(c)
-                cipher_labels.append("c")
-            if c1 is not None:
-                ciphertexts.append(c1)
-                cipher_labels.append("c1")
-            if c2 is not None:
-                ciphertexts.append(c2)
-                cipher_labels.append("c2")
+            m = None  # Result
             
-            # Use the first ciphertext found
-            active_c = ciphertexts[0] if ciphertexts else None
-            active_c_label = cipher_labels[0] if cipher_labels else None
+            # =================== ATTACK STRATEGY ===================
             
-            # =============================================
-            # 3. CHECK FOR DOUBLE ENCRYPTION SCENARIO
-            # =============================================
-            # Double encryption requires: n, at least 2 exponents, and a ciphertext
-            if n and len(exponents) >= 2 and active_c:
-                self.log(f"[*] Detected {len(exponents)} exponents and ciphertext in '{active_c_label}'")
-                self.log(f"[*] This might be a double encryption scenario")
+            # 1. HÅSTAD BROADCAST ATTACK
+            if not m and e is not None and e <= 100:
+                ciphertexts = []
+                for ct_key in ['c', 'c1', 'c2', 'c3']:
+                    if ct_key in params:
+                        ciphertexts.append(params[ct_key])
                 
-                # If we have exactly 2 exponents, try double_encryption_attack
-                if len(exponents) == 2:
-                    exp1, exp2 = exponents[0], exponents[1]
-                    label1, label2 = exp_labels[0], exp_labels[1]
+                if len(ciphertexts) >= 3:  # Need at least 3 for e=3
+                    self.log("[1] TRYING HÅSTAD BROADCAST ATTACK...", "header")
+                    self.log(f"   • Small e = {e}")
+                    self.log(f"   • {len(ciphertexts)} ciphertexts available")
                     
-                    self.log(f"[*] Using double_encryption_attack with {label1}={exp1}, {label2}={exp2}")
-                    self.log(f"[*] {label1} bit length: {exp1.bit_length()} bits")
-                    self.log(f"[*] {label2} bit length: {exp2.bit_length()} bits")
-                    
-                    # Try the double encryption attack
-                    m = double_encryption_attack(n, exp1, exp2, active_c, log_callback=self.log)
-                    
-                    if m:
-                        self.log(f"[+] Double encryption attack SUCCESS!", "green")
-                    else:
-                        self.log("[-] Double encryption attack failed")
-                
-                # If we have 3 exponents, try all pairs
-                elif len(exponents) == 3:
-                    self.log(f"[*] Trying all 2-exponent combinations for double encryption")
-                    
-                    # Try all pairs of exponents
-                    for i in range(len(exponents)):
-                        for j in range(i+1, len(exponents)):
-                            exp_i, label_i = exponents[i], exp_labels[i]
-                            exp_j, label_j = exponents[j], exp_labels[j]
-                            
-                            self.log(f"[*] Trying pair ({label_i}, {label_j})")
-                            
-                            # Try double encryption attack on this pair
-                            m = double_encryption_attack(n, exp_i, exp_j, active_c, log_callback=self.log)
-                            
-                            if m:
-                                self.log(f"[+] SUCCESS with pair ({label_i}, {label_j})!", "green")
-                                break
-                        
-                        if m is not None:
-                            break
+                    m_hastad = hastad_broadcast_attack(e, ciphertexts)
+                    if m_hastad:
+                        self.log("   ✅ HÅSTAD ATTACK SUCCESSFUL!", "success")
+                        m = m_hastad
             
-            # =============================================
-            # CASE 1: We have dp and dq (RSA-CRT)
-            # =============================================
-            if m is None and active_c and p and q and dp and dq:
-                self.log("[+] RSA-CRT detected (dp, dq provided) → Using CRT decryption")
-                m = rsa_crt_decrypt(active_c, p, q, dp, dq)
+            # 2. DOUBLE ENCRYPTION ATTACK
+            if not m and n and e1 and e2 and c:
+                self.log("[2] TRYING DOUBLE ENCRYPTION ATTACK...", "header")
+                self.log(f"   • e1 = {e1}, e2 = {e2}")
+                self.log(f"   • n = {n.bit_length()}-bit")
                 
-                # Compute n if not provided
-                if n is None:
-                    n = p * q
-                    self.log(f"[+] Computed n = p×q = {n}")
-
-            # =============================================
-            # CASE 2: We have p, q, e but no d
-            # =============================================
-            if m is None and p and q:
-                if self.stop_flag: 
-                    return
-                if n is None:
-                    n = p * q
-                    self.log(f"[+] n = p×q = {n}")
-                else:
-                    # Verify n = p*q
-                    if n != p * q:
-                        self.log("[!] Warning: n does not equal p×q!")
-
-                # Use the first available exponent
-                active_e = None
-                if e is not None:
-                    active_e = e
-                elif e1 is not None:
-                    active_e = e1
-                elif e2 is not None:
-                    active_e = e2
-                    
-                if active_e and not d:
-                    d = compute_d(p, q, active_e)
-                    self.log(f"[+] d computed from p,q,e")
+                m_double = double_encryption_attack(n, e1, e2, c, log_callback=self.log)
+                if m_double:
+                    self.log("   ✅ DOUBLE ENCRYPTION ATTACK SUCCESSFUL!", "success")
+                    m = m_double
             
-            # =============================================
-            # MASSIVE RSA CHECK: if n is prime, compute phi = n-1, d, then decrypt
-            # =============================================
-            if m is None and n and active_c and (e is not None or e1 is not None or e2 is not None):
-                # prefer the first available exponent
-                active_e = e if e is not None else (e1 if e1 is not None else e2)
-                if active_e:
-                    self.log("[*] Checking for Massive RSA attack (n prime)...")
-                    m_massive = massive_rsa_attack(n, active_e, active_c, log_callback=self.log)
-                    if m_massive:
-                        self.log("[+] Massive RSA attack SUCCESS! (n was prime)", "green")
-                        m = m_massive
-
-            # =============================================
-            # CASE 3: No p, q, dp, dq - try standard attacks
-            # =============================================
-            if m is None and n and not (p or q or d) and active_c:
-                bits = n.bit_length()
+            # 3. CRT DECRYPTION
+            if not m and c and p and q and dp and dq:
+                self.log("[3] TRYING CRT DECRYPTION...", "header")
+                self.log(f"   • p = {p.bit_length()}-bit, q = {q.bit_length()}-bit")
+                self.log(f"   • dp = {dp}, dq = {dq}")
                 
-                # EXTENDED FACTORING: Try up to 2000 bits
-                self.log(f"[*] n is {bits}-bit → choosing optimal attack...")
+                m_crt = rsa_crt_decrypt(c, p, q, dp, dq)
+                if m_crt:
+                    self.log("   ✅ CRT DECRYPTION SUCCESSFUL!", "success")
+                    m = m_crt
+            
+            # 4. STANDARD DECRYPTION WITH D
+            if not m and c and d and n:
+                self.log("[4] TRYING STANDARD DECRYPTION...", "header")
+                self.log(f"   • d = {d.bit_length()}-bit")
+                self.log(f"   • n = {n.bit_length()}-bit")
                 
-                # FIRST: Try low exponent attack if e is small
-                active_e = None
-                if e is not None:
-                    active_e = e
-                elif e1 is not None:
-                    active_e = e1
-                elif e2 is not None:
-                    active_e = e2
+                m_standard = rsa_decrypt(c, d, n)
+                if m_standard:
+                    self.log("   ✅ STANDARD DECRYPTION SUCCESSFUL!", "success")
+                    m = m_standard
+            
+            # 5. FACTORIZATION ATTEMPTS
+            if not m and n and e and c and not p and not q:
+                self.log("[5] ATTEMPTING FACTORIZATION...", "header")
+                self.log(f"   • n = {n.bit_length()}-bit modulus")
                 
-                if active_e and active_e <= 100:
-                    self.log(f"[*] Small e={active_e} detected → trying low exponent attack...")
-                    m_low = low_exponent_attack(active_e, n, active_c)
+                # Try low exponent attack first
+                if e and e <= 100:
+                    self.log("   • Trying low exponent attack...")
+                    m_low = low_exponent_attack(e, n, c)
                     if m_low:
-                        self.log(f"[+] LOW EXPONENT ATTACK SUCCESS! m = {m_low}", "green")
+                        self.log("   ✅ LOW EXPONENT ATTACK SUCCESSFUL!", "success")
                         m = m_low
-                    
-                # If low exponent attack didn't work or wasn't applicable
-                if m is None:
-                    # Try FactorDB first (online database) - works up to 2000 bits
-                    self.log(f"[*] Querying FactorDB (factordb.com) for {bits}-bit n...")
+                
+                # Try Wiener attack
+                if not m:
+                    self.log("   • Trying Wiener attack...")
+                    d_wiener = wiener_attack(e, n)
+                    if d_wiener:
+                        self.log("   ✅ WIENER ATTACK SUCCESSFUL!", "success")
+                        m = rsa_decrypt(c, d_wiener, n)
+                
+                # Try factorization
+                if not m and n.bit_length() <= 4096:  # Security limit
+                    self.log("   • Attempting factorization...")
                     p_found, q_found = smart_factor_n(n, use_factordb=True)
-                    
-                    if self.stop_flag: 
-                        return
-
-                    if p_found:
-                        p, q = sorted([p_found, q_found])
-                        self.log(f"[+] FACTORDB SUCCESS! Found p ({p.bit_length()} bits)", "green")
-                        self.log(f"[+] FACTORDB SUCCESS! Found q ({q.bit_length()} bits)", "green")
-
-                        if active_e:
-                            d = compute_d(p, q, active_e)
-                            self.log("[+] d computed from p,q,e")
-                    else:
-                        # Only try local factorization for numbers up to ~1024 bits
-                        if bits <= 1024:
-                            self.log("[-] FactorDB failed → trying local factorization...")
-                            # Try local methods without FactorDB
-                            p_found, q_found = smart_factor_n(n, use_factordb=False)
-                            
-                            if p_found:
-                                p, q = sorted([p_found, q_found])
-                                self.log(f"[+] LOCAL FACTORIZATION SUCCESS! p = {p}", "green")
-                                self.log(f"[+] LOCAL FACTORIZATION SUCCESS! q = {q}", "green")
-
-                                if active_e:
-                                    d = compute_d(p, q, active_e)
-                                    self.log("[+] d computed")
-                            else:
-                                self.log("[-] Local factoring failed → trying Wiener attack...")
-                                if active_e:
-                                    d = wiener_attack(active_e, n)
-                                    if d:
-                                        self.log(f"[+] Wiener SUCCESS! d = {d}", "green")
-                                else:
-                                    self.log("[-] No e provided for Wiener attack")
-                        else:
-                            self.log(f"[-] Number too large ({bits} bits) for local factoring")
-                            self.log("[*] Try providing p and q manually if you have them")
-
-            # =============================================
-            # Show result section for all cases that have data
-            # =============================================
-            values_found = any([e, e1, e2, n, c, c1, c2, p, q, d, dp, dq])
-            if values_found:
-                self.log("\n" + "═" * 80)
-                self.log("RESULT:\n")
-
-                # Show all available values
-                dump_pairs = [("e", e), ("e1", e1), ("e2", e2), ("n", n), 
-                            ("c", c), ("c1", c1), ("c2", c2),
-                            ("p", p), ("q", q), ("d", d), ("dp", dp), ("dq", dq)]
-                
-                for k, v in dump_pairs:
-                    if v is not None:
-                        self.log(f"    {k.upper()} = {v}\n")
-
-            # =============================================
-            # Decrypt and show plaintext
-            # =============================================
+                    if p_found and q_found:
+                        self.log("   ✅ FACTORIZATION SUCCESSFUL!", "success")
+                        self.log(f"   • p = {p_found.bit_length()}-bit")
+                        self.log(f"   • q = {q_found.bit_length()}-bit")
+                        
+                        # Compute d and decrypt
+                        d_computed = compute_d(p_found, q_found, e)
+                        m = rsa_decrypt(c, d_computed, n)
             
-            # If we already got m from attacks
+            # 6. MASSIVE RSA ATTACK (n is prime)
+            if not m and n and e and c:
+                self.log("[6] TRYING MASSIVE RSA ATTACK...", "header")
+                m_massive = massive_rsa_attack(n, e, c, log_callback=self.log)
+                if m_massive:
+                    self.log("   ✅ MASSIVE RSA ATTACK SUCCESSFUL!", "success")
+                    m = m_massive
+            
+            # =================== DISPLAY RESULTS ===================
+            self.log("\n" + "=" * 70, "header")
+            
             if m is not None:
-                raw = int_to_bytes(m)
-                ascii_text = try_decode(raw)
+                # Convert to bytes
+                raw_bytes = int_to_bytes(m)
+                ascii_text = try_decode(raw_bytes)
+                hex_text = raw_bytes.hex()
                 
-                self.log("\nDecrypted Plaintext:\n")
-                self.log(f"  ASCII = {ascii_text}")
-                self.log(f"  HEX   = {raw.hex()}")
-                self.log(f"  DEC   = {m}")
-                self.log(f"  BYTES = {raw}")
+                self.log("🎉 DECRYPTION SUCCESSFUL!", "success")
+                self.log("=" * 70, "header")
                 
-                if "flag" in ascii_text.lower() or "pico" in ascii_text.lower() or "ctf" in ascii_text.lower() or "CTF" in ascii_text:
-                    self.log("\nFLAG FOUND!!!", "red")
-                else:
-                    self.log("\n[+] Decrypted!")
+                self.log("\n📖 DECRYPTED MESSAGE:")
+                self.log("-" * 40)
+                # UPDATED: Use ascii_red tag for ASCII result
+                self.log(f"ASCII:  {ascii_text}", "ascii_red")
+                self.log(f"HEX:    {hex_text}")
+                self.log(f"Decimal: {m}")
+                
+                if raw_bytes:
+                    self.log(f"Bytes (first 100): {raw_bytes[:100]}{'...' if len(raw_bytes) > 100 else ''}")
+                
+                # Check for flags
+                flag_indicators = ['flag{', 'ctf{', 'pico{', 'L3AK{', 'scriptCTF{', 'FLAG{', 'CTF{']
+                text_lower = ascii_text.lower()
+                
+                for indicator in flag_indicators:
+                    if indicator in text_lower or indicator.replace('{', '') in text_lower:
+                        self.log("\n" + "!" * 60, "flag")
+                        self.log("🚩 FLAG FOUND! 🚩", "flag")
+                        self.log("!" * 60, "flag")
+                        self.log(f"\n🔥 {ascii_text}", "flag")
+                        
+                        # Auto-copy flag to clipboard
+                        self.root.clipboard_clear()
+                        self.root.clipboard_append(ascii_text.strip())
+                        self.log("[Flag copied to clipboard]", "param")
+                        break
+                
+                # Save to history
+                result_entry = {
+                    'timestamp': datetime.now().isoformat(),
+                    'params': {k: str(v) for k, v in params.items() if v is not None},
+                    'result': ascii_text,
+                    'hex': hex_text,
+                    'decimal': str(m)
+                }
+                self.results_history.append(result_entry)
+                
+            else:
+                self.log("❌ DECRYPTION FAILED", "error")
+                self.log("-" * 40)
+                self.log("No attack succeeded with the given parameters.")
+                self.log("\n💡 SUGGESTIONS:")
+                self.log("  • Ensure all required parameters are provided")
+                self.log("  • Try adding more ciphertexts for broadcast attacks")
+                self.log("  • Check if modulus can be factored online")
+                self.log("  • Verify parameter formats (hex with 0x, decimal)")
             
-            # Otherwise, try standard RSA decryption
-            elif not self.stop_flag and active_c and d and n:
-                m = rsa_decrypt(active_c, d, n)
-                raw = int_to_bytes(m)
-                ascii_text = try_decode(raw)
-
-                self.log("\nDecrypted Plaintext:\n")
-                self.log(f"  ASCII = {ascii_text}")
-                self.log(f"  HEX   = {raw.hex()}")
-                self.log(f"  DEC   = {m}")
-                self.log(f"  BYTES = {raw}")
-
-                if "flag" in ascii_text.lower() or "pico" in ascii_text.lower() or "ctf" in ascii_text.lower() or "CTF" in ascii_text:
-                    self.log("\nFLAG FOUND!!!", "red")
-                else:
-                    self.log("\n[+] Decrypted!")
-
-            elif not self.stop_flag and m is None and active_c:
-                # Only show this message if we didn't already handle it
-                self.log("[!] Cannot decrypt — missing required parameters")
-
+            self.log("\n" + "=" * 70, "header")
+            
         except Exception as ex:
-            self.log(f"\n[ERROR] {ex}\n{traceback.format_exc()}")
-
+            self.log(f"\n❌ ERROR: {str(ex)}", "error")
+            self.log(traceback.format_exc(), "error")
+            
         finally:
             if not self.stop_flag:
-                self.root.after(0, lambda: self.btn_crack.config(state="normal", text="CRACK RSA"))
-                self.log("\nCRACKING COMPLETED!", "done")
-            else:
-                self.btn_crack.config(state="normal", text="CRACK RSA")
+                elapsed = time.time() - self.start_time
+                self.root.after(0, self.btn_crack.config, {'state': 'normal', 'text': '🚀 CRACK RSA'})
+                self.root.after(0, self.status_label.config, {'text': 'Ready'})
+                self.root.after(0, self.time_label.config, {'text': f'Completed in {elapsed:.2f}s'})
+                self.log(f"\n⏱️  Total time: {elapsed:.2f} seconds", "param")
+
+    def copy_results(self):
+        """Copy results to clipboard"""
+        content = self.results_text.get(1.0, tk.END).strip()
+        if content:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(content)
+            self.log("\n📋 Results copied to clipboard!", "success")
+
+    def save_results(self):
+        """Save results to file"""
+        content = self.results_text.get(1.0, tk.END).strip()
+        if not content:
+            return
+        
+        filename = filedialog.asksaveasfilename(
+            defaultextension=".txt",
+            filetypes=[
+                ("Text files", "*.txt"),
+                ("JSON files", "*.json"),
+                ("All files", "*.*")
+            ],
+            initialfile=f"rsa_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        )
+        
+        if filename:
+            try:
+                with open(filename, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                self.log(f"\n💾 Results saved to: {filename}", "success")
+            except Exception as e:
+                self.log(f"\n❌ Error saving file: {str(e)}", "error")
+
+    def save_values(self):
+        """Save current input values to file"""
+        try:
+            values = {}
+            for key, entry in self.entries.items():
+                if isinstance(entry, tk.Entry):
+                    value = entry.get().strip()
+                    if value:
+                        values[key] = value
+            
+            with open(self.saved_values_file, 'w', encoding='utf-8') as f:
+                json.dump(values, f, indent=2)
+            
+            self.log(f"\n💾 Input values saved successfully!", "success")
+            
+        except Exception as e:
+            self.log(f"\n❌ Error saving values: {str(e)}", "error")
+
+    def load_saved_values(self):
+        """Load saved values from file"""
+        try:
+            if os.path.exists(self.saved_values_file):
+                with open(self.saved_values_file, 'r', encoding='utf-8') as f:
+                    values = json.load(f)
+                
+                for key, value in values.items():
+                    if key in self.entries and isinstance(self.entries[key], tk.Entry):
+                        self.entries[key].delete(0, tk.END)
+                        self.entries[key].insert(0, value)
+                
+                self.log(f"Loaded {len(values)} saved values", "param")
+                
+        except Exception as e:
+            # Don't show error if file doesn't exist or is invalid
+            pass
+
+    def show_history(self):
+        """Show previous results history"""
+        if not self.results_history:
+            self.log("\n📜 No history available yet", "warning")
+            return
+        
+        self.log("\n" + "=" * 70, "header")
+        self.log("📜 RESULTS HISTORY", "header")
+        self.log("=" * 70, "header")
+        
+        for i, entry in enumerate(reversed(self.results_history[-5:]), 1):  # Show last 5
+            self.log(f"\n[{i}] {entry['timestamp'].split('T')[0]} {entry['timestamp'].split('T')[1][:8]}")
+            self.log(f"   Result: {entry['result'][:100]}{'...' if len(entry['result']) > 100 else ''}", "history_result")
+
+# Main entry
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = RSACracker(root)
+    root.mainloop()

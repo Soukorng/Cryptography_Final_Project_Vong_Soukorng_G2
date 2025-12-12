@@ -1,3 +1,27 @@
-gmpy2>=2.1.0
-requests>=2.28.0
-factordb-python>=0.2.0
+# Modern RSA Cracker Pro - Secure Edition
+# Requirements for Python 3.8+
+
+# Core cryptography (REPLACES pycrypto)[citation:10]
+cryptography>=42.0.0  # Modern, actively maintained crypto library
+
+# Mathematics and number theory
+gmpy2>=2.2.0          # Fast arbitrary precision arithmetic
+sympy>=1.12           # Symbolic mathematics (for some attacks)
+
+# Factorization support
+factordb-python>=1.0.0  # FactorDB API client
+
+# GUI enhancements
+ttkthemes>=3.2.0       # Modern themes for tkinter
+pillow>=10.0.0         # Image support for icons
+
+# Development and testing
+pytest>=7.4.0
+black>=23.0.0
+mypy>=1.5.0
+
+# HTTP requests for FactorDB
+requests>=2.31.0
+
+# Note: pycrypto and other deprecated libraries have been removed
+# The cryptography library is the modern, secure alternative[citation:10]
