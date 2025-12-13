@@ -435,8 +435,8 @@ class RSACracker:
             {
                 'base': 'n', 
                 'label': 'Modulus (n)',
-                'add_fields': [],
-                'has_add_button': False
+                'add_fields': ['n1', 'n2', 'n3'],
+                'has_add_button': True
             },
             {
                 'base': 'c',
@@ -723,7 +723,7 @@ class RSACracker:
         try:
             # Collect all parameters with validation
             params = {}
-            param_keys = ['e', 'e1', 'e2', 'n', 'c', 'c1', 'c2', 'c3', 'p', 'q', 'd', 'dp', 'dq']
+            param_keys = ['e', 'e1', 'e2', 'n', 'n1', 'n2', 'n3', 'c', 'c1', 'c2', 'c3', 'p', 'q', 'd', 'dp', 'dq']
             
             for key in param_keys:
                 value = self.get(key)
@@ -744,6 +744,9 @@ class RSACracker:
             e1 = params.get('e1')
             e2 = params.get('e2')
             n = params.get('n')
+            n1 = params.get('n1')
+            n2 = params.get('n2')
+            n3 = params.get('n3')
             c = params.get('c')
             c1 = params.get('c1')
             c2 = params.get('c2')
@@ -760,17 +763,28 @@ class RSACracker:
             
             # 1. HÅSTAD BROADCAST ATTACK
             if not m and e is not None and e <= 100:
+                # Collect ciphertexts
                 ciphertexts = []
                 for ct_key in ['c', 'c1', 'c2', 'c3']:
                     if ct_key in params:
                         ciphertexts.append(params[ct_key])
                 
-                if len(ciphertexts) >= 3:  # Need at least 3 for e=3
+                # Collect moduli
+                moduli = []
+                for n_key in ['n', 'n1', 'n2', 'n3']:
+                    if n_key in params:
+                        moduli.append(params[n_key])
+                
+                # We need at least e ciphertexts AND at least e moduli
+                if len(ciphertexts) >= e and len(moduli) >= e:
                     self.log("[1] TRYING HÅSTAD BROADCAST ATTACK...", "header")
                     self.log(f"   • Small e = {e}")
                     self.log(f"   • {len(ciphertexts)} ciphertexts available")
+                    self.log(f"   • {len(moduli)} moduli available")
                     
-                    m_hastad = hastad_broadcast_attack(e, ciphertexts)
+                    # Use the improved hastad_broadcast_attack with moduli parameter
+                    m_hastad = hastad_broadcast_attack(e, ciphertexts, moduli, 
+                                                    log_callback=self.log)
                     if m_hastad:
                         self.log("   ✅ HÅSTAD ATTACK SUCCESSFUL!", "success")
                         m = m_hastad

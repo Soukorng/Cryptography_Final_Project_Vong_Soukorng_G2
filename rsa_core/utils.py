@@ -103,3 +103,33 @@ def int_to_bytes_secure(n: int) -> bytes:
         return b'\x00'
     
     return n.to_bytes((n.bit_length() + 7) // 8, 'big')
+
+def chinese_remainder_theorem(remainders, moduli):
+    """
+    Solve the system of congruences:
+    x ≡ remainders[i] (mod moduli[i]) for all i
+    
+    Returns: x such that x ≡ remainders[i] (mod moduli[i]) for all i
+    """
+    if len(remainders) != len(moduli):
+        raise ValueError("Remainders and moduli must have same length")
+    
+    if len(remainders) == 0:
+        return 0
+    
+    # Use iterative Garner's algorithm for better performance
+    x = remainders[0]
+    N = moduli[0]
+    
+    for i in range(1, len(remainders)):
+        # Compute solution for first i+1 congruences
+        try:
+            inv = mod_inverse(N, moduli[i])
+        except ValueError:
+            raise ValueError(f"No solution: gcd({N}, {moduli[i]}) != 1")
+        
+        x = x + (remainders[i] - x) * inv % moduli[i] * N
+        N *= moduli[i]
+        x %= N
+    
+    return x

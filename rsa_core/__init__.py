@@ -24,6 +24,7 @@ __all__ = [
     'mod_inverse',
     'is_perfect_square',
     'validate_rsa_params',
+    'chinese_remainder_theorem'
     'int_to_bytes',
     'bytes_to_hex',
     'try_decode',

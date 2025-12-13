@@ -10,7 +10,7 @@ import gmpy2
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 
-from .utils import mod_inverse, validate_rsa_params
+from .utils import mod_inverse, validate_rsa_params, chinese_remainder_theorem
 
 def low_exponent_attack(e: int, n: int, c: int) -> Optional[int]:
     """
@@ -107,40 +107,127 @@ def wiener_attack(e: int, n: int) -> Optional[int]:
 
 def hastad_broadcast_attack(e: int, 
                            ciphertexts: List[int], 
-                           moduli: List[int]) -> Optional[int]:
+                           moduli: List[int] = None,
+                           log_callback: Optional[Callable] = None) -> Optional[int]:
     """
-    Håstad's Broadcast Attack for same message encrypted under multiple keys[citation:5].
-    Requires e ciphertexts with the same small e.
+    Håstad's Broadcast Attack for same message encrypted under multiple keys.
+    
+    Requirements:
+    1. Same message m encrypted under different moduli n_i
+    2. Same small public exponent e (e=3, e=5, etc.)
+    3. At least e ciphertexts/moduli pairs
+    
+    Enhanced with better CRT and error handling.
     """
-    if len(ciphertexts) < e:
+    def log(msg: str):
+        if log_callback:
+            log_callback(msg)
+    
+    log(f"[Håstad] Starting broadcast attack with e={e}")
+    
+    # If moduli not provided, assume all use same n (from single modulus scenario)
+    if moduli is None:
+        log(f"[Håstad] No moduli provided, using single modulus scenario")
+        # Try low exponent attack instead
         return None
     
-    # Use Chinese Remainder Theorem to recover m^e
+    # Validate inputs
+    if len(ciphertexts) < e:
+        log(f"[Håstad] Need at least {e} ciphertexts for e={e}, got {len(ciphertexts)}")
+        return None
+    
+    if len(moduli) < e:
+        log(f"[Håstad] Need at least {e} moduli for e={e}, got {len(moduli)}")
+        return None
+    
+    # Use the minimum of available ciphertexts and moduli
+    count = min(len(ciphertexts), len(moduli), e)
+    log(f"[Håstad] Using {count} ciphertext-moduli pairs")
+    
+    # Collect the pairs to use
+    c_list = ciphertexts[:count]
+    n_list = moduli[:count]
+    
+    # Log the pairs
+    for i, (ci, ni) in enumerate(zip(c_list, n_list)):
+        log(f"[Håstad] Pair {i+1}: c={ci}, n={ni.bit_length()}-bits")
+    
     try:
-        # For e=3, need 3 ciphertexts
-        if e == 3 and len(ciphertexts) >= 3:
-            # Combine using CRT
-            from functools import reduce
+        # Step 1: Use Chinese Remainder Theorem to recover m^e
+        log(f"[Håstad] Applying Chinese Remainder Theorem...")
+        
+        # Import CRT implementation
+        from functools import reduce
+        
+        def chinese_remainder_theorem(remainders, moduli):
+            """
+            Solve the system of congruences:
+            x ≡ remainders[i] (mod moduli[i]) for all i
+            """
+            # Total modulus N = product of all moduli
+            N = reduce(lambda a, b: a * b, moduli)
             
-            def crt(remainders, moduli):
-                total = 0
-                prod = reduce(lambda a, b: a * b, moduli)
+            # Compute solution using Garner's algorithm
+            result = 0
+            for i in range(len(remainders)):
+                ni = moduli[i]
+                Ni = N // ni
                 
-                for r_i, n_i in zip(remainders, moduli):
-                    p = prod // n_i
-                    total += r_i * mod_inverse(p, n_i) * p
+                # Compute modular inverse of Ni mod ni
+                try:
+                    Mi = mod_inverse(Ni, ni)
+                except ValueError:
+                    log(f"[Håstad] Error: No inverse for {Ni} mod {ni}")
+                    return None
                 
-                return total % prod
+                result += remainders[i] * Ni * Mi
+                result %= N
             
-            # Get m^e
-            m_pow_e = crt(ciphertexts[:3], moduli[:3])
-            
-            # Take eth root
+            return result
+        
+        # Combine ciphertexts using CRT
+        m_pow_e = chinese_remainder_theorem(c_list, n_list)
+        
+        if m_pow_e is None:
+            log("[Håstad] CRT failed")
+            return None
+        
+        log(f"[Håstad] Recovered m^{e} = {m_pow_e}")
+        log(f"[Håstad] m^{e} is {m_pow_e.bit_length()}-bits")
+        
+        # Step 2: Take the e-th root over integers
+        log(f"[Håstad] Computing {e}-th root...")
+        
+        # Check if m^e is reasonable size (should be less than product of moduli)
+        max_possible_m = reduce(lambda a, b: a * b, n_list)
+        if m_pow_e >= max_possible_m:
+            log(f"[Håstad] Warning: m^{e} >= product of moduli, may not be correct")
+        
+        try:
+            # Use gmpy2 for efficient root computation
             m, exact = gmpy2.iroot(m_pow_e, e)
+            
             if exact:
+                log(f"[Håstad] ✅ Success! Found exact {e}-th root")
                 return int(m)
+            else:
+                log(f"[Håstad] Not an exact {e}-th root")
+                
+                # Try nearby values (in case of padding)
+                log(f"[Håstad] Trying nearby values (for potential padding)...")
+                for offset in [0, 1, -1, 2, -2]:
+                    m_test, exact_test = gmpy2.iroot(m_pow_e + offset, e)
+                    if exact_test:
+                        log(f"[Håstad] ✅ Found exact root with offset {offset}")
+                        return int(m_test)
+        
+        except Exception as root_ex:
+            log(f"[Håstad] Error computing root: {root_ex}")
+            return None
+    
     except Exception as ex:
-        print(f"Håstad attack failed: {ex}")
+        log(f"[Håstad] Error in broadcast attack: {ex}")
+        return None
     
     return None
 
