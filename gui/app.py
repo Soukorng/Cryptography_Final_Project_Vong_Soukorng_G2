@@ -184,7 +184,7 @@ class RSACracker:
                                  bd=0,
                                  relief='flat',
                                  cursor='hand2')
-        self.btn_crack.pack(side=tk.LEFT, padx=(0, 10), pady=10)
+        self.btn_crack.pack(side=tk.LEFT, padx=(5, 10), pady=10)
         
         # Clear button
         btn_clear = tk.Button(action_frame,
@@ -404,7 +404,7 @@ class RSACracker:
                       fg=self.colors['text'],
                       font=('Arial', 10, 'bold'),
                       anchor='w',
-                      width=20)
+                      width=15)
         lbl.pack(anchor='w')
         
         # Entry field with rounded corners (center)
@@ -465,7 +465,7 @@ class RSACracker:
                       fg=self.colors['text'],
                       font=('Arial', 9),
                       anchor='w',
-                      width=18)
+                      width=13)
         lbl.pack(anchor='w')
         
         # Entry
