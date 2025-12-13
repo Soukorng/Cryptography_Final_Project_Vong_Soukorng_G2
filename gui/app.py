@@ -122,68 +122,160 @@ class RSACracker:
         
         # =================== LEFT COLUMN - INPUT ===================
         left_container = ttk.Frame(main_container, style='Card.TFrame')
-        left_container.grid(row=0, column=0, sticky='nsew', padx=(0, 10))
+        left_container.grid(row=0, column=0, sticky='nsew', padx=(0, 2))
+        left_container.columnconfigure(0, weight=1)
+        left_container.rowconfigure(1, weight=1)  # Make the scrollable area expandable
         
         # Header for input section
-        input_header = ttk.Frame(left_container, style='Card.TFrame')
-        input_header.pack(fill=tk.X, padx=20, pady=(20, 10))
+        input_header = tk.Frame(left_container, bg=self.colors['card_bg'])
+        input_header.grid(row=0, column=0, sticky='ew', padx=20, pady=(25, 10))
         
         input_title = tk.Label(input_header,
-                             text="🔧 INPUT PARAMETERS",
-                             bg=self.colors['card_bg'],
-                             fg=self.colors['accent'],
-                             font=('Arial', 14, 'bold'))
+                            text="🔧 INPUT PARAMETERS",
+                            bg=self.colors['card_bg'],
+                            fg=self.colors['accent'],
+                            font=('Arial', 14, 'bold'))
         input_title.pack(side=tk.LEFT)
         
+        # Create a container for the scrollable area and scrollbar
+        scroll_container = ttk.Frame(left_container, style='Card.TFrame')
+        scroll_container.grid(row=1, column=0, sticky='nsew', padx=20, pady=(0, 10))
+        scroll_container.columnconfigure(0, weight=1)
+        scroll_container.rowconfigure(0, weight=1)
+        
         # Create scrollable input area
-        input_canvas = tk.Canvas(left_container,
+        input_canvas = tk.Canvas(scroll_container,
                                 bg=self.colors['card_bg'],
                                 highlightthickness=0)
-        input_scrollbar = ttk.Scrollbar(left_container,
-                                       orient='vertical',
-                                       command=input_canvas.yview,
-                                       style='Custom.Vertical.TScrollbar')
+        input_scrollbar = ttk.Scrollbar(scroll_container,
+                                    orient='vertical',
+                                    command=input_canvas.yview,
+                                    style='Custom.Vertical.TScrollbar')
         input_scrollable_frame = ttk.Frame(input_canvas, style='Card.TFrame')
         
-        input_scrollable_frame.bind(
-            "<Configure>",
-            lambda e: input_canvas.configure(scrollregion=input_canvas.bbox("all"))
-        )
+        # Store canvas reference for later updates
+        self.input_canvas = input_canvas
+        self.input_scrollable_frame = input_scrollable_frame
+        
+        def update_scrollregion(event=None):
+            """Update the scrollregion of the canvas - FIXED VERSION"""
+            # Get the bbox of all items in the canvas (should be just our frame)
+            bbox = input_canvas.bbox("all")
+            if bbox:
+                # Only update if we have content
+                # Get the actual height of the content
+                content_height = input_scrollable_frame.winfo_reqheight()
+                canvas_height = input_canvas.winfo_height()
+                
+                # If content is taller than canvas, allow scrolling
+                # Otherwise, don't allow scrolling
+                if content_height > canvas_height:
+                    # Set scrollregion to exactly the content size
+                    input_canvas.configure(scrollregion=(0, 0, bbox[2], content_height))
+                    input_scrollbar.grid()  # Show scrollbar
+                else:
+                    # Hide scrollbar if content fits
+                    input_scrollbar.grid_remove()
+                    # Still set scrollregion to content bounds but disable scrolling
+                    input_canvas.configure(scrollregion=(0, 0, bbox[2], bbox[3]))
+        
+        # Bind the configure event to update scrollregion
+        input_scrollable_frame.bind("<Configure>", update_scrollregion)
         
         canvas_window = input_canvas.create_window((0, 0),
-                                                  window=input_scrollable_frame,
-                                                  anchor="nw")
+                                                window=input_scrollable_frame,
+                                                anchor="nw")
         
         def configure_canvas(event):
+            """Configure canvas width when resized"""
             input_canvas.itemconfig(canvas_window, width=event.width)
+            # Update scrollregion when canvas is resized
+            self.root.after(100, update_scrollregion)
         
         input_canvas.bind('<Configure>', configure_canvas)
         input_canvas.configure(yscrollcommand=input_scrollbar.set)
         
-        # Pack canvas and scrollbar
-        input_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=20, pady=(0, 20))
-        input_scrollbar.pack(side=tk.RIGHT, fill=tk.Y, pady=(0, 20))
+        # Pack canvas and scrollbar SIDE BY SIDE in the middle area
+        input_canvas.grid(row=0, column=0, sticky='nsew')
+        input_scrollbar.grid(row=0, column=1, sticky='ns')
+        
+        # Make the canvas expandable
+        scroll_container.grid_rowconfigure(0, weight=1)
+        scroll_container.grid_columnconfigure(0, weight=1)
         
         # Create input fields in scrollable frame
         self.create_input_fields(input_scrollable_frame)
         
+        # =================== MOUSE WHEEL SCROLLING FOR LEFT SIDE ===================
+        def on_mousewheel(event):
+            """Handle mouse wheel scrolling for the left canvas"""
+            # Check if scrolling is actually needed
+            content_height = input_scrollable_frame.winfo_reqheight()
+            canvas_height = input_canvas.winfo_height()
+            
+            if content_height <= canvas_height:
+                return  # Don't scroll if content fits
+            
+            # For Windows and Mac
+            if event.num == 5 or event.delta < 0:
+                input_canvas.yview_scroll(1, "units")
+            elif event.num == 4 or event.delta > 0:
+                input_canvas.yview_scroll(-1, "units")
+        
+        def bind_mousewheel(widget):
+            """Bind mouse wheel events to a widget"""
+            # Windows and Mac
+            widget.bind("<MouseWheel>", on_mousewheel)
+            # Linux
+            widget.bind("<Button-4>", on_mousewheel)
+            widget.bind("<Button-5>", on_mousewheel)
+        
+        # Bind mouse wheel to both canvas and scrollable frame
+        bind_mousewheel(input_canvas)
+        bind_mousewheel(input_scrollable_frame)
+        
+        # Also bind to all children of the scrollable frame (input fields)
+        def bind_to_children(parent):
+            """Recursively bind mouse wheel to all child widgets"""
+            for child in parent.winfo_children():
+                bind_mousewheel(child)
+                if child.winfo_children():
+                    bind_to_children(child)
+        
+        # Bind to existing children
+        bind_to_children(input_scrollable_frame)
+        
+        # Bind to future children (when dynamic fields are added)
+        def on_child_added(event):
+            bind_to_children(input_scrollable_frame)
+            # Update scrollregion when new children are added
+            self.root.after(100, update_scrollregion)
+        
+        input_scrollable_frame.bind("<Configure>", on_child_added)
+        
+        # Add a method to update scrollregion that can be called externally
+        self.update_input_scrollregion = update_scrollregion
+        
+        # Initial scrollregion update
+        self.root.after(200, update_scrollregion)
+        # =================== END MOUSE WHEEL SCROLLING ===================
+        
         # =================== ACTION BUTTONS ===================
-        # Create a separate frame for action buttons at the bottom of left column
-        action_frame = ttk.Frame(left_container, style='Card.TFrame')
-        action_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=20, pady=(0, 20))
+        action_frame = tk.Frame(left_container, bg=self.colors['card_bg'])
+        action_frame.grid(row=2, column=0, sticky='ew', padx=20, pady=(0, 20))
         
         # CRACK button (cyan)
         self.btn_crack = tk.Button(action_frame,
-                                 text="🚀 CRACK RSA",
-                                 command=self.start_crack,
-                                 bg=self.colors['button_bg'],
-                                 fg=self.colors['button_fg'],
-                                 font=('Arial', 12, 'bold'),
-                                 padx=30,
-                                 pady=15,
-                                 bd=0,
-                                 relief='flat',
-                                 cursor='hand2')
+                                text="🚀 CRACK RSA",
+                                command=self.start_crack,
+                                bg=self.colors['button_bg'],
+                                fg=self.colors['button_fg'],
+                                font=('Arial', 12, 'bold'),
+                                padx=30,
+                                pady=15,
+                                bd=0,
+                                relief='flat',
+                                cursor='hand2')
         self.btn_crack.pack(side=tk.LEFT, padx=(5, 10), pady=10)
         
         # Clear button
@@ -216,17 +308,17 @@ class RSACracker:
         
         # =================== RIGHT COLUMN - RESULTS ===================
         right_container = ttk.Frame(main_container, style='Card.TFrame')
-        right_container.grid(row=0, column=1, sticky='nsew', padx=(10, 0))
+        right_container.grid(row=0, column=1, sticky='nsew', padx=(2, 0))
         
         # Header for results section
-        results_header = ttk.Frame(right_container, style='Card.TFrame')
+        results_header = tk.Frame(right_container, bg=self.colors['card_bg'])
         results_header.pack(fill=tk.X, padx=20, pady=(20, 10))
         
         results_title = tk.Label(results_header,
-                               text="📊 RESULTS",
-                               bg=self.colors['card_bg'],
-                               fg=self.colors['accent'],
-                               font=('Arial', 14, 'bold'))
+                            text="📊 RESULTS",
+                            bg=self.colors['card_bg'],
+                            fg=self.colors['accent'],
+                            font=('Arial', 14, 'bold'))
         results_title.pack(side=tk.LEFT)
         
         # Results action buttons
@@ -262,16 +354,16 @@ class RSACracker:
         self.btn_save.pack(side=tk.LEFT, padx=2)
         
         self.btn_history = tk.Button(results_actions,
-                                   text="📜 History",
-                                   command=self.show_history,
-                                   bg='#475569',
-                                   fg='white',
-                                   font=('Arial', 10),
-                                   padx=15,
-                                   pady=5,
-                                   bd=0,
-                                   relief='flat',
-                                   cursor='hand2')
+                                text="📜 History",
+                                command=self.show_history,
+                                bg='#475569',
+                                fg='white',
+                                font=('Arial', 10),
+                                padx=15,
+                                pady=5,
+                                bd=0,
+                                relief='flat',
+                                cursor='hand2')
         self.btn_history.pack(side=tk.LEFT, padx=2)
         
         # Results text area
@@ -283,19 +375,19 @@ class RSACracker:
         text_frame.pack(fill=tk.BOTH, expand=True)
         
         self.results_text = tk.Text(text_frame,
-                                   wrap=tk.WORD,
-                                   font=('Consolas', 10),
-                                   bg=self.colors['input_bg'],
-                                   fg=self.colors['input_fg'],
-                                   insertbackground=self.colors['accent'],
-                                   relief='flat',
-                                   padx=15,
-                                   pady=15)
+                                wrap=tk.WORD,
+                                font=('Consolas', 10),
+                                bg=self.colors['input_bg'],
+                                fg=self.colors['input_fg'],
+                                insertbackground=self.colors['accent'],
+                                relief='flat',
+                                padx=15,
+                                pady=15)
         
         text_scrollbar = ttk.Scrollbar(text_frame,
-                                      orient='vertical',
-                                      command=self.results_text.yview,
-                                      style='Custom.Vertical.TScrollbar')
+                                    orient='vertical',
+                                    command=self.results_text.yview,
+                                    style='Custom.Vertical.TScrollbar')
         
         self.results_text.configure(yscrollcommand=text_scrollbar.set)
         
@@ -317,19 +409,19 @@ class RSACracker:
         status_frame.grid(row=1, column=0, columnspan=2, sticky='ew', pady=(10, 0))
         
         self.status_label = tk.Label(status_frame,
-                                   text="Ready",
-                                   bg=self.colors['card_bg'],
-                                   fg=self.colors['text'],
-                                   font=('Arial', 9))
+                                text="Ready",
+                                bg=self.colors['card_bg'],
+                                fg=self.colors['text'],
+                                font=('Arial', 9))
         self.status_label.pack(side=tk.LEFT, padx=20, pady=10)
         
         self.time_label = tk.Label(status_frame,
-                                 text="",
-                                 bg=self.colors['card_bg'],
-                                 fg=self.colors['text'],
-                                 font=('Consolas', 9))
+                                text="",
+                                bg=self.colors['card_bg'],
+                                fg=self.colors['text'],
+                                font=('Consolas', 9))
         self.time_label.pack(side=tk.RIGHT, padx=20, pady=10)
-
+        
     def create_input_fields(self, parent):
         """Create input fields with dynamic expansion"""
         # Define main fields and their additional fields
@@ -893,7 +985,7 @@ class RSACracker:
         self.log("📜 RESULTS HISTORY", "header")
         self.log("=" * 70, "header")
         
-        for i, entry in enumerate(reversed(self.results_history[-5:]), 1):  # Show last 5
+        for i, entry in enumerate(reversed(self.results_history[-10:]), 1):  # Show last 5
             self.log(f"\n[{i}] {entry['timestamp'].split('T')[0]} {entry['timestamp'].split('T')[1][:8]}")
             self.log(f"   Result: {entry['result'][:100]}{'...' if len(entry['result']) > 100 else ''}", "history_result")
 
