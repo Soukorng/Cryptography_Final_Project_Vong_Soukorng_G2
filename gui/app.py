@@ -1003,8 +1003,3 @@ class RSACracker:
             self.log(f"\n[{i}] {entry['timestamp'].split('T')[0]} {entry['timestamp'].split('T')[1][:8]}")
             self.log(f"   Result: {entry['result'][:100]}{'...' if len(entry['result']) > 100 else ''}", "history_result")
 
-# Main entry
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = RSACracker(root)
-    root.mainloop()
