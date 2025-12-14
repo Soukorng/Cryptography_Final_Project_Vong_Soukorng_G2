@@ -781,7 +781,7 @@ class RSACracker:
                 )
                 
                 if m_found:
-                    self.log("   ✅ DECRYPTION WITH φ(n) SUCCESSFUL!")
+                    self.log("   ✅ DECRYPTION WITH φ(n) SUCCESSFUL!", "success")
                     m = m_found
                     
                     # Update recovered values for display
