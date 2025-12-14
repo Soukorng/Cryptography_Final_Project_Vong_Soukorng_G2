@@ -10,7 +10,7 @@ import gmpy2
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 
-from .utils import mod_inverse, validate_rsa_params, chinese_remainder_theorem
+from .utils import mod_inverse, validate_rsa_params
 
 def low_exponent_attack(e: int, n: int, c: int) -> Optional[int]:
     """
