@@ -19,7 +19,8 @@ try:
         rsa_decrypt, compute_d, smart_factor_n,
         wiener_attack, low_exponent_attack, rsa_crt_decrypt,
         double_encryption_attack, massive_rsa_attack,
-        hastad_broadcast_attack, decrypt_with_phi, decrypt_with_pq
+        hastad_broadcast_attack, decrypt_with_phi, decrypt_with_pq,
+        even_n_attack, common_modulus_attack, decrypt_with_n_and_prime,
     )
 except ImportError as e:
     print(f"Import Error: {e}")
@@ -767,10 +768,42 @@ class RSACracker:
             m = None  # Result
             
              # =================== PRIORITY 1: DECRYPT WITH KNOWN PARAMETERS ===================
-        
-            # 1. DECRYPTION WITH PHI (φ)
+
+            # 1. EVEN N ATTACK (when n is even)
+            if not m and n and e and c:
+                if n % 2 == 0:
+                    self.log("[1] TRYING EVEN N ATTACK...", "header")
+                    self.log(f"   • n is even (catastrophic error)")
+                    self.log(f"   • p must be 2, q = n/2 = {n//2}")
+                    
+                    # Use the even_n_attack function
+                    m_even = even_n_attack(n, e, c)
+                    if m_even:
+                        self.log("   ✅ EVEN N ATTACK SUCCESSFUL!", "success")
+                        m = m_even
+
+            # 2. COMMON MODULUS ATTACK
+            if not m and n and e and c:
+                # Check for second exponent and ciphertext
+                e1 = params.get('e1')
+                e2 = params.get('e2')
+                c2 = params.get('c1')  # Using c1 as second ciphertext
+                
+                if e1 and e2 and c2:
+                    self.log("[2] TRYING COMMON MODULUS ATTACK...", "header")
+                    self.log(f"   • Same message encrypted with e1={e1} and e2={e2}")
+                    self.log(f"   • n = {n.bit_length()}-bit")
+                    self.log(f"   • c1 = {c.bit_length()}-bit, c2 = {c2.bit_length()}-bit")
+                    
+                    # Use the common_modulus_attack function
+                    m_common = common_modulus_attack(c, c2, e1, e2, n, log_callback=self.log)
+                    if m_common:
+                        self.log("   ✅ COMMON MODULUS ATTACK SUCCESSFUL!", "success")
+                        m = m_common
+
+            # 3. DECRYPTION WITH PHI (φ)
             if not m and e and phi and c:
-                self.log("[1] TRYING DECRYPTION WITH φ(n)...", "header")
+                self.log("[3] TRYING DECRYPTION WITH φ(n)...", "header")
                 self.log(f"   • e = {e}")
                 self.log(f"   • φ = {phi.bit_length()}-bit")
                 self.log(f"   • c = {c.bit_length()}-bit")
@@ -796,9 +829,9 @@ class RSACracker:
                 else:
                     self.log("   ❌ Decryption with φ(n) failed", "warning")
             
-            # 2. STANDARD DECRYPTION WITH p AND q
+            # 4. STANDARD DECRYPTION WITH p AND q
             if not m and c and p and q:
-                self.log("[2] TRYING STANDARD DECRYPTION WITH p AND q...", "header")
+                self.log("[4] TRYING STANDARD DECRYPTION WITH p AND q...", "header")
                 
                 # Use the consolidated decrypt_with_pq function
                 m_found, n_found, d_found = decrypt_with_pq(
@@ -818,11 +851,42 @@ class RSACracker:
                         d = d_found
                         self.log(f"   • Recovered d = {d_found.bit_length()}-bit")
         
+            # 5. DECRYPT WITH n AND ONE PRIME (p or q)
+            if not m and n and c:
+                p = params.get('p')
+                q = params.get('q')
+                
+                # Case 1: Have n and p, recover q
+                if n and p and not q:
+                    self.log("[5] DECRYPTION WITH n AND p...", "header")
+                    self.log(f"   • n = {n.bit_length()}-bit")
+                    self.log(f"   • p = {p.bit_length()}-bit")
+                    
+                    # Use the decrypt_with_n_and_prime function
+                    m_found, n_found, d_found = decrypt_with_n_and_prime(
+                        c=c, n=n, prime=p, e=e, log_callback=self.log
+                    )
+                    if m_found:
+                        self.log("   ✅ DECRYPTION WITH n AND p SUCCESSFUL!", "success")
+                        m = m_found
+                
+                # Case 2: Have n and q, recover p
+                elif n and q and not p:
+                    self.log("[5] DECRYPTION WITH n AND q...", "header")
+                    self.log(f"   • n = {n.bit_length()}-bit")
+                    self.log(f"   • q = {q.bit_length()}-bit")
+                    
+                    # Use the decrypt_with_n_and_prime function
+                    m_found, n_found, d_found = decrypt_with_n_and_prime(
+                        c=c, n=n, prime=q, e=e, log_callback=self.log
+                    )
+                    if m_found:
+                        self.log("   ✅ DECRYPTION WITH n AND q SUCCESSFUL!", "success")
+                        m = m_found
 
-
-            # 3. STANDARD DECRYPTION WITH d
+            # 6. STANDARD DECRYPTION WITH d
             if not m and c and d and n:
-                self.log("[3] TRYING STANDARD DECRYPTION WITH d AND n...", "header")
+                self.log("[6] TRYING STANDARD DECRYPTION WITH d AND n...", "header")
                 self.log(f"   • d = {d.bit_length()}-bit")
                 self.log(f"   • n = {n.bit_length()}-bit")
                 
@@ -831,9 +895,9 @@ class RSACracker:
                     self.log("   ✅ STANDARD DECRYPTION SUCCESSFUL!", "success")
                     m = m_standard
 
-            # 4. CRT DECRYPTION
+            # 7. CRT DECRYPTION
             if not m and c and p and q and dp and dq:
-                self.log("[3] TRYING CRT DECRYPTION...", "header")
+                self.log("[7] TRYING CRT DECRYPTION...", "header")
                 self.log(f"   • p = {p.bit_length()}-bit, q = {q.bit_length()}-bit")
                 self.log(f"   • dp = {dp}, dq = {dq}")
                 
@@ -844,7 +908,7 @@ class RSACracker:
 
             # =================== ATTACK STRATEGY ===================
             
-            # 5. HÅSTAD BROADCAST ATTACK
+            # 8. HÅSTAD BROADCAST ATTACK
             if not m and e is not None and e <= 100:
                 # Collect ciphertexts
                 ciphertexts = []
@@ -860,7 +924,7 @@ class RSACracker:
                 
                 # We need at least e ciphertexts AND at least e moduli
                 if len(ciphertexts) >= e and len(moduli) >= e:
-                    self.log("[5] TRYING HÅSTAD BROADCAST ATTACK...", "header")
+                    self.log("[8] TRYING HÅSTAD BROADCAST ATTACK...", "header")
                     self.log(f"   • Small e = {e}")
                     self.log(f"   • {len(ciphertexts)} ciphertexts available")
                     self.log(f"   • {len(moduli)} moduli available")
@@ -872,9 +936,9 @@ class RSACracker:
                         self.log("   ✅ HÅSTAD ATTACK SUCCESSFUL!", "success")
                         m = m_hastad
 
-            # 6. DOUBLE ENCRYPTION ATTACK
+            # 9. DOUBLE ENCRYPTION ATTACK
             if not m and n and e1 and e2 and c:
-                self.log("[6] TRYING DOUBLE ENCRYPTION ATTACK...", "header")
+                self.log("[9] TRYING DOUBLE ENCRYPTION ATTACK...", "header")
                 self.log(f"   • e1 = {e1}, e2 = {e2}")
                 self.log(f"   • n = {n.bit_length()}-bit")
                 
@@ -883,9 +947,9 @@ class RSACracker:
                     self.log("   ✅ DOUBLE ENCRYPTION ATTACK SUCCESSFUL!", "success")
                     m = m_double
             
-            # 7. FACTORIZATION ATTEMPTS
+            # 10. FACTORIZATION ATTEMPTS
             if not m and n and e and c and not p and not q:
-                self.log("[7] ATTEMPTING FACTORIZATION...", "header")
+                self.log("[10] ATTEMPTING FACTORIZATION...", "header")
                 self.log(f"   • n = {n.bit_length()}-bit modulus")
                 
                 # Try low exponent attack first
@@ -917,9 +981,9 @@ class RSACracker:
                         d_computed = compute_d(p_found, q_found, e)
                         m = rsa_decrypt(c, d_computed, n)
             
-            # 8. MASSIVE RSA ATTACK (n is prime)
+            # 11. MASSIVE RSA ATTACK (n is prime)
             if not m and n and e and c:
-                self.log("[8] TRYING MASSIVE RSA ATTACK...", "header")
+                self.log("[11] TRYING MASSIVE RSA ATTACK...", "header")
                 m_massive = massive_rsa_attack(n, e, c, log_callback=self.log)
                 if m_massive:
                     self.log("   ✅ MASSIVE RSA ATTACK SUCCESSFUL!", "success")

@@ -444,7 +444,7 @@ def smart_factor_phi(phi: int, use_factordb: bool = True, log_callback=None) -> 
             
             if gmpy2.is_prime(p) and gmpy2.is_prime(q):
                 if (p - 1) * (q - 1) == phi:
-                    log(f"[Factor φ] ✅ Standard factorization successful!")
+                    log(f"[Factor φ] ✓ Standard factorization successful!")
                     return p, q
         
         log("[Factor φ] Standard factors don't yield prime p and q")
@@ -577,7 +577,7 @@ def smart_factor_phi(phi: int, use_factordb: bool = True, log_callback=None) -> 
         # Check if they're prime and φ matches
         if (p_candidate * q_candidate - p_candidate - q_candidate + 1) == phi:
             if gmpy2.is_prime(p_candidate) and gmpy2.is_prime(q_candidate):
-                log(f"[Factor φ] ✅ Found via general quadratic!")
+                log(f"[Factor φ] ✓ Found via general quadratic!")
                 log(f"[Factor φ] p = {p_candidate.bit_length()}-bit, q = {q_candidate.bit_length()}-bit")
                 return p_candidate, q_candidate
     

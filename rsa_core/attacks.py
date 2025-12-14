@@ -9,8 +9,7 @@ from typing import Optional, Tuple, List, Callable
 import gmpy2
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
-
-from .utils import mod_inverse, validate_rsa_params
+from .utils import mod_inverse, validate_rsa_params, egcd
 
 def low_exponent_attack(e: int, n: int, c: int) -> Optional[int]:
     """
@@ -206,7 +205,7 @@ def hastad_broadcast_attack(e: int,
             m, exact = gmpy2.iroot(m_pow_e, e)
             
             if exact:
-                log(f"[Håstad] ✅ Success! Found exact {e}-th root")
+                log(f"[Håstad] ✓ Success! Found exact {e}-th root")
                 return int(m)
             else:
                 log(f"[Håstad] Not an exact {e}-th root")
@@ -216,7 +215,7 @@ def hastad_broadcast_attack(e: int,
                 for offset in [0, 1, -1, 2, -2]:
                     m_test, exact_test = gmpy2.iroot(m_pow_e + offset, e)
                     if exact_test:
-                        log(f"[Håstad] ✅ Found exact root with offset {offset}")
+                        log(f"[Håstad] ✓ Found exact root with offset {offset}")
                         return int(m_test)
         
         except Exception as root_ex:
@@ -231,17 +230,26 @@ def hastad_broadcast_attack(e: int,
 
 def even_n_attack(n: int, e: int, c: int) -> Optional[int]:
     """
-    Attack when N is even (catastrophic vulnerability)[citation:1][citation:6].
+    Attack when N is even (catastrophic vulnerability).
     One prime factor must be 2.
     """
+    def log(msg: str):
+        print(f"[Even N] {msg}")
+    
+    log(f"Checking if n is even...")
+    
     if n % 2 != 0:
+        log("n is odd, attack not applicable")
         return None
+    
+    log(f"n is even! p = 2")
     
     p = 2
     q = n // 2
     
     # Verify q is odd (should be for RSA)
     if q % 2 == 0:
+        log(f"q is also even: q = {q}")
         return None
     
     # Compute phi and d
@@ -249,9 +257,13 @@ def even_n_attack(n: int, e: int, c: int) -> Optional[int]:
     
     try:
         d = mod_inverse(e, phi)
+        log(f"Computed d = {d}")
+        
         m = pow(c, d, n)
+        log(f"Decryption successful!")
         return m
-    except:
+    except Exception as ex:
+        log(f"Error: {ex}")
         return None
 
 def massive_rsa_attack(n: int, e: int, c: int, 
@@ -328,7 +340,7 @@ def double_encryption_attack(n: int, e1: int, e2: int, c: int, log_callback=None
     d_total = wiener_attack(e_total, n)
     
     if d_total:
-        log(f"[Double Encryption] ✅ WIENER ATTACK SUCCESSFUL! Found d_total = {d_total}")
+        log(f"[Double Encryption] ✓ WIENER ATTACK SUCCESSFUL! Found d_total = {d_total}")
         log(f"[Double Encryption] d_total bit length: {d_total.bit_length()} bits")
         
         # Decrypt directly: m = c^d_total mod n
@@ -403,7 +415,7 @@ def double_encryption_attack(n: int, e1: int, e2: int, c: int, log_callback=None
                         q = (s - sqrt_disc) // 2
                         
                         if p * q == n and p > 1 and q > 1:
-                            log(f"[Double Encryption] ✅ Found valid d from convergent {i}: d = {d}")
+                            log(f"[Double Encryption] ✓ Found valid d from convergent {i}: d = {d}")
                             log(f"[Double Encryption] k = {k}, phi = {phi}")
                             log(f"[Double Encryption] p = {p.bit_length()}-bit, q = {q.bit_length()}-bit")
                             
@@ -517,3 +529,51 @@ def double_encryption_attack(n: int, e1: int, e2: int, c: int, log_callback=None
     
     log(f"[Double Encryption] ❌ All attacks failed")
     return None
+
+def common_modulus_attack(n: int, e1: int, e2: int, c1: int, c2: int, log_callback=None) -> Optional[int]:
+    """
+    Common modulus attack.
+    Given same message encrypted with two different exponents:
+    c1 = m^e1 mod n
+    c2 = m^e2 mod n
+    
+    Recovers m when gcd(e1, e2) = 1
+    """
+    def log(msg: str):
+        if log_callback:
+            log_callback(msg)
+    
+    log(f"[Common Modulus] Starting attack with e1={e1}, e2={e2}")
+    
+    # Check if exponents are coprime
+    if math.gcd(e1, e2) != 1:
+        log(f"[Common Modulus] gcd(e1, e2) = {math.gcd(e1, e2)} != 1")
+        return None
+    
+    # Use existing egcd function from utils
+    g, a, b = egcd(e1, e2)
+    
+    if g != 1:
+        log(f"[Common Modulus] Extended Euclidean failed: gcd = {g}")
+        return None
+    
+    # We have a*e1 + b*e2 = 1
+    # So m = c1^a * c2^b mod n
+    
+    # Need to handle negative exponents
+    if a < 0:
+        c1_inv = pow(c1, -1, n)
+        term1 = pow(c1_inv, -a, n)
+    else:
+        term1 = pow(c1, a, n)
+    
+    if b < 0:
+        c2_inv = pow(c2, -1, n)
+        term2 = pow(c2_inv, -b, n)
+    else:
+        term2 = pow(c2, b, n)
+    
+    m = (term1 * term2) % n
+    
+    log(f"[Common Modulus] ✓ Success! Recovered message")
+    return m
