@@ -418,3 +418,168 @@ def smart_factor_n(n: int, use_factordb: bool = True) -> Tuple[Optional[int], Op
     # ==================================================
     print(f"[Factor] Number too large ({bits} bits) for efficient factoring in this tool (max 4096 bits).")
     return None, None
+
+def smart_factor_phi(phi: int, use_factordb: bool = True, log_callback=None) -> Tuple[Optional[int], Optional[int]]:
+    """
+    Smart factorization of φ(n) = (p-1)(q-1) to recover p and q.
+    Now includes quadratic solving for special cases like p = a*q + b.
+    """
+    def log(msg):
+        if log_callback:
+            log_callback(msg)
+    
+    log(f"[Factor φ] Starting to factor φ = {phi.bit_length()}-bit")
+    
+    # First, try standard factorization
+    log("[Factor φ] Attempting standard factorization...")
+    f1, f2 = smart_factor_n(phi, use_factordb=use_factordb)
+    
+    if f1 and f2:
+        log(f"[Factor φ] Found factors: f1 = {f1.bit_length()}-bit, f2 = {f2.bit_length()}-bit")
+        
+        # Try both orderings
+        for p_minus_1, q_minus_1 in [(f1, f2), (f2, f1)]:
+            p = p_minus_1 + 1
+            q = q_minus_1 + 1
+            
+            if gmpy2.is_prime(p) and gmpy2.is_prime(q):
+                if (p - 1) * (q - 1) == phi:
+                    log(f"[Factor φ] ✅ Standard factorization successful!")
+                    return p, q
+        
+        log("[Factor φ] Standard factors don't yield prime p and q")
+    
+    # =================== SPECIAL CASE: QUADRATIC SOLVING ===================
+    # Try to solve for p and q when they have a linear relationship: p = a*q + b
+    log("[Factor φ] Trying quadratic solving for linear relationships...")
+    
+    # Common linear relationships in CTF challenges
+    linear_relations = [
+        (2, 1),    # p = 2q + 1 (common in safe primes)
+        (2, -1),   # p = 2q - 1
+        (3, 1),    # p = 3q + 1
+        (3, -1),   # p = 3q - 1
+        (1, 2),    # p = q + 2
+        (1, -2),   # p = q - 2
+        (4, 1),    # p = 4q + 1
+        (4, -1),   # p = 4q - 1
+    ]
+    
+    for a, b in linear_relations:
+        # Try both directions: p = a*q + b and q = a*p + b
+        for swap in [False, True]:
+            if swap:
+                # Swap the relationship: q = a*p + b
+                a_eff, b_eff = a, b
+                # We'll solve for p first
+            else:
+                # Original: p = a*q + b
+                a_eff, b_eff = a, b
+                # We'll solve for q first
+            
+            # Equation: φ = (p-1)(q-1)
+            # With p = a*q + b: φ = (a*q + b - 1)(q - 1) = a*q² + (b - a - 1)q - (b - 1)
+            # So: a*q² + (b - a - 1)q - (b - 1 + φ) = 0
+            
+            A = a_eff
+            B = b_eff - a_eff - 1
+            C = -(b_eff - 1 + phi)
+            
+            # Discriminant
+            D = B*B - 4*A*C
+            
+            if D < 0:
+                continue
+            
+            # Check if D is a perfect square
+            sqrt_D = gmpy2.isqrt(D)
+            if sqrt_D * sqrt_D != D:
+                continue
+            
+            # Try both roots
+            for sign in [1, -1]:
+                numerator = -B + sign * sqrt_D
+                if numerator <= 0:
+                    continue
+                
+                if numerator % (2*A) != 0:
+                    continue
+                
+                q_candidate = numerator // (2*A)
+                
+                if swap:
+                    # We solved for p actually
+                    p_candidate = q_candidate
+                    q_candidate = a_eff * p_candidate + b_eff
+                else:
+                    p_candidate = a_eff * q_candidate + b_eff
+                
+                # Ensure positivity
+                if p_candidate <= 0 or q_candidate <= 0:
+                    continue
+                
+                # Check if both are prime
+                if gmpy2.is_prime(p_candidate) and gmpy2.is_prime(q_candidate):
+                    # Verify φ
+                    if (p_candidate - 1) * (q_candidate - 1) == phi:
+                        log(f"[Factor φ] ✓ Found with relation p = {a}*q + {b}" + (" (swapped)" if swap else ""))
+                        log(f"[Factor φ] p = {p_candidate.bit_length()}-bit, q = {q_candidate.bit_length()}-bit")
+                        return p_candidate, q_candidate
+    
+    # =================== GENERAL QUADRATIC SOLVING ===================
+    # Try to solve the general quadratic without assuming a relationship
+    log("[Factor φ] Trying general quadratic solving...")
+    
+    # We know: φ = (p-1)(q-1) = pq - p - q + 1
+    # Let s = p + q, then φ = n - s + 1, so s = n - φ + 1
+    # But we don't know n = pq
+    
+    # However, we can consider that p and q are roots of: x² - s*x + n = 0
+    # And s² - 4n = (p-q)²
+    
+    # From φ = (p-1)(q-1), we have φ = pq - (p+q) + 1
+    # Let n = pq, s = p+q
+    # Then φ = n - s + 1 => n = φ + s - 1
+    
+    # Also, s² - 4n = s² - 4(φ + s - 1) = s² - 4s - 4φ + 4
+    
+    # For p and q to be integers, (p-q)² must be a perfect square
+    # So we need s such that s² - 4s - 4φ + 4 is a perfect square
+    
+    # Since s ≈ 2√n and n ≈ φ, s ≈ 2√φ
+    # Try s around 2√φ
+    
+    sqrt_phi = gmpy2.isqrt(phi)
+    s_min = 2 * sqrt_phi - 1000
+    s_max = 2 * sqrt_phi + 1000
+    
+    log(f"[Factor φ] Searching for s in range [{s_min}, {s_max}]")
+    
+    for s in range(s_min, s_max + 1):
+        if s <= 0:
+            continue
+        
+        # Compute discriminant
+        disc = s*s - 4*s - 4*phi + 4
+        
+        if disc < 0:
+            continue
+        
+        # Check if perfect square
+        sqrt_disc = gmpy2.isqrt(disc)
+        if sqrt_disc * sqrt_disc != disc:
+            continue
+        
+        # Found valid s
+        p_candidate = (s + sqrt_disc) // 2
+        q_candidate = (s - sqrt_disc) // 2
+        
+        # Check if they're prime and φ matches
+        if (p_candidate * q_candidate - p_candidate - q_candidate + 1) == phi:
+            if gmpy2.is_prime(p_candidate) and gmpy2.is_prime(q_candidate):
+                log(f"[Factor φ] ✅ Found via general quadratic!")
+                log(f"[Factor φ] p = {p_candidate.bit_length()}-bit, q = {q_candidate.bit_length()}-bit")
+                return p_candidate, q_candidate
+    
+    log("[Factor φ] ❌ All methods failed to factor φ")
+    return None, None

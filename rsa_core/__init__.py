@@ -6,9 +6,9 @@ Secure Edition 2025
 
 from .utils import mod_inverse, is_perfect_square, validate_rsa_params
 from .converters import int_to_bytes, bytes_to_hex, try_decode
-from .decrypt import rsa_decrypt, rsa_crt_decrypt
+from .decrypt import rsa_decrypt, rsa_crt_decrypt, decrypt_with_phi, decrypt_with_pq
 from .compute_d import compute_d, compute_d_from_phi
-from .factorize import smart_factor_n, factor_from_factordb
+from .factorize import smart_factor_n, factor_from_factordb, smart_factor_phi
 from .attacks import (
     wiener_attack, 
     low_exponent_attack, 
@@ -24,15 +24,17 @@ __all__ = [
     'mod_inverse',
     'is_perfect_square',
     'validate_rsa_params',
-    'chinese_remainder_theorem'
     'int_to_bytes',
     'bytes_to_hex',
     'try_decode',
     'rsa_decrypt',
     'rsa_crt_decrypt',
+    'decrypt_with_phi',
+    'decrypt_with_pq',
     'compute_d',
     'compute_d_from_phi',
     'smart_factor_n',
+    'smart_factor_phi',
     'factor_from_factordb',
     'wiener_attack',
     'low_exponent_attack',
