@@ -40,8 +40,6 @@ def low_exponent_attack(e: int, n: int, c: int) -> Optional[int]:
                 return int(m_test)
         except:
             continue
-    
-    # Strategy 3: Chinese Remainder Theorem for multiple ciphertexts
     return None
 
 def wiener_attack(e: int, n: int) -> Optional[int]:
