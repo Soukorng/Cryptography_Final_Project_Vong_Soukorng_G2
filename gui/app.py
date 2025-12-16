@@ -1,7 +1,7 @@
 # gui/app.py - Modern RSA Cracker with Dark Blue Theme
 import threading
 import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext, filedialog
+from tkinter import ttk, filedialog
 import time
 import traceback
 import sys

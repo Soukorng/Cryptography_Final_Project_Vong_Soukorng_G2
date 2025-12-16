@@ -1,14 +1,7 @@
 # rsa_core/attacks.py
-"""
-Modern RSA Attack Implementations
-Includes security enhancements and new attacks
-"""
-
 import math
-from typing import Optional, Tuple, List, Callable
 import gmpy2
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives import serialization
+from typing import Optional, List, Callable
 from .utils import mod_inverse, validate_rsa_params, egcd
 
 def low_exponent_attack(e: int, n: int, c: int) -> Optional[int]:

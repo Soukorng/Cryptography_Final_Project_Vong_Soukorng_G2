@@ -1,10 +1,5 @@
 # rsa_core/__init__.py
-"""
-Modern RSA Cracking Core Module
-Secure Edition 2025
-"""
-
-from .utils import mod_inverse, is_perfect_square, validate_rsa_params, egcd
+from .utils import mod_inverse, is_perfect_square, validate_rsa_params
 from .converters import int_to_bytes, bytes_to_hex, try_decode
 from .decrypt import rsa_decrypt, rsa_crt_decrypt, decrypt_with_phi, decrypt_with_pq, recover_prime_from_n, decrypt_with_n_and_prime
 from .compute_d import compute_d, compute_d_from_phi
@@ -19,8 +14,6 @@ from .attacks import (
     common_modulus_attack
 )
 
-__version__ = "2025.12.1"
-__author__ = "RSA Cracker Pro Team"
 __all__ = [
     'mod_inverse',
     'is_perfect_square',
