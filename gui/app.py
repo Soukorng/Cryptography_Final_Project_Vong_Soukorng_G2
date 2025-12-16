@@ -597,20 +597,15 @@ class RSACracker:
                         m = m_even
 
             # 2. COMMON MODULUS ATTACK
-            if not m and n and e and c:
-                # Check for second exponent and ciphertext
-                e1 = params.get('e1')
-                e2 = params.get('e2')
-                c2 = params.get('c1')  # Using c1 as second ciphertext
-                
-                if e1 and e2 and c2:
+            if not m and n and e1 and e2 and c1 and c2:
                     self.log("[2] TRYING COMMON MODULUS ATTACK...", "header")
                     self.log(f"   • Same message encrypted with e1={e1} and e2={e2}")
                     self.log(f"   • n = {n.bit_length()}-bit")
-                    self.log(f"   • c1 = {c.bit_length()}-bit, c2 = {c2.bit_length()}-bit")
+                    self.log(f"   • c1 = {c1.bit_length()}-bit, c2 = {c2.bit_length()}-bit")
                     
                     # Use the common_modulus_attack function
-                    m_common = common_modulus_attack(c, c2, e1, e2, n, log_callback=self.log)
+                    m_common = common_modulus_attack(n, e1, e2, c1, c2, log_callback=self.log)
+                    
                     if m_common:
                         self.log("   ✅ COMMON MODULUS ATTACK SUCCESSFUL!", "success")
                         m = m_common
@@ -667,8 +662,6 @@ class RSACracker:
         
             # 5. DECRYPT WITH n AND ONE PRIME (p or q)
             if not m and n and c:
-                p = params.get('p')
-                q = params.get('q')
                 
                 # Case 1: Have n and p, recover q
                 if n and p and not q:

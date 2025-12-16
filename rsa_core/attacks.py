@@ -99,16 +99,7 @@ def hastad_broadcast_attack(e: int,
                            ciphertexts: List[int], 
                            moduli: List[int] = None,
                            log_callback: Optional[Callable] = None) -> Optional[int]:
-    """
-    Håstad's Broadcast Attack for same message encrypted under multiple keys.
     
-    Requirements:
-    1. Same message m encrypted under different moduli n_i
-    2. Same small public exponent e (e=3, e=5, etc.)
-    3. At least e ciphertexts/moduli pairs
-    
-    Enhanced with better CRT and error handling.
-    """
     def log(msg: str):
         if log_callback:
             log_callback(msg)
@@ -298,17 +289,7 @@ def massive_rsa_attack(n: int, e: int, c: int,
     return None
 
 def double_encryption_attack(n: int, e1: int, e2: int, c: int, log_callback=None):
-    """
-    Attack double encryption with identical N: c = (m^e1)^e2 mod n = m^(e1*e2) mod n
     
-    Multiple strategies:
-    1. Direct Wiener attack on e_total = e1 * e2 (main attack for identical N)
-    2. Layered Wiener attack (if one exponent is huge)
-    3. Individual Wiener attacks
-    4. Factorization
-    
-    Returns m if successful, None otherwise.
-    """
     # Helper function for logging
     def log(msg):
         if log_callback:
@@ -524,14 +505,7 @@ def double_encryption_attack(n: int, e1: int, e2: int, c: int, log_callback=None
     return None
 
 def common_modulus_attack(n: int, e1: int, e2: int, c1: int, c2: int, log_callback=None) -> Optional[int]:
-    """
-    Common modulus attack.
-    Given same message encrypted with two different exponents:
-    c1 = m^e1 mod n
-    c2 = m^e2 mod n
     
-    Recovers m when gcd(e1, e2) = 1
-    """
     def log(msg: str):
         if log_callback:
             log_callback(msg)
