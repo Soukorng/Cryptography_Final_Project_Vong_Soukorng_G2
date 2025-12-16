@@ -119,8 +119,8 @@ class RSACracker:
         
         # Clear button
         btn_clear = ctk.CTkButton(action_frame,
-                                 text="🗑️ Clear All",
-                                 command=self.clear_all,
+                                 text="🗑️ Reset",
+                                 command=self.reset,
                                  font=ctk.CTkFont(size=12),
                                  height=40,
                                  fg_color='#475569',
@@ -360,13 +360,19 @@ class RSACracker:
                                   corner_radius=6)
             add_btn.grid(row=0, column=2, padx=(5, 0), pady=5)
 
-    def add_dynamic_field(self, base_field, group):
+    def add_dynamic_field(self, base_field, group, specific_field=None):
         """Add a dynamic field below the base field"""
-        if not self.dynamic_fields[base_field]['available']:
-            return
-        
-        # Get next available field
-        field_name = self.dynamic_fields[base_field]['available'].pop(0)
+        if specific_field:
+            # If specific field is provided, use it if available
+            if specific_field not in self.dynamic_fields[base_field]['available']:
+                return
+            field_name = specific_field
+            self.dynamic_fields[base_field]['available'].remove(field_name)
+        else:
+            # Otherwise use the next available
+            if not self.dynamic_fields[base_field]['available']:
+                return
+            field_name = self.dynamic_fields[base_field]['available'].pop(0)
         
         # Create the dynamic field (indented)
         dynamic_frame = ctk.CTkFrame(self.dynamic_fields[base_field]['frame'], 
@@ -469,7 +475,7 @@ class RSACracker:
         self.btn_copy.configure(state="normal")
         self.btn_save.configure(state="normal")
 
-    def clear_all(self):
+    def reset(self):
         """Clear all inputs and results"""
         self.stop_flag = True
         
@@ -896,6 +902,15 @@ class RSACracker:
                     if value:
                         values[key] = value
             
+            dynamic_state = {}
+            for base_field, data in self.dynamic_fields.items():
+                dynamic_state[base_field] = {
+                    'added': [field_data['name'] for field_data in data['added']],
+                    'available': data['available'].copy()
+                }
+            
+            values['_dynamic_state'] = dynamic_state
+
             with open(self.saved_values_file, 'w', encoding='utf-8') as f:
                 json.dump(values, f, indent=2)
             
@@ -912,16 +927,59 @@ class RSACracker:
                     values = json.load(f)
                 
                 for key, value in values.items():
+                    if key == '_dynamic_state':
+                        continue                     
+                    
                     if key in self.entries and isinstance(self.entries[key], ctk.CTkEntry):
                         self.entries[key].delete(0, 'end')
                         self.entries[key].insert(0, value)
-                
-                self.log(f"Loaded {len(values)} saved values", "param")
-                
+                # Restore dynamic fields state
+                if '_dynamic_state' in values:
+                    dynamic_state = values['_dynamic_state']
+                    
+                    for base_field, state in dynamic_state.items():
+                        if base_field in self.dynamic_fields:
+                            # Clear any existing dynamic fields for this base
+                            for field_data in self.dynamic_fields[base_field]['added'][:]:
+                                self.remove_dynamic_field(field_data['name'], field_data['frame'])
+                            
+                            # Restore the dynamic fields that were saved
+                            for field_name in state['added']:
+                                # Find the group for this base field
+                                for group in self.get_field_groups():
+                                    if group['base'] == base_field:
+                                        # Add the dynamic field
+                                        self.add_dynamic_field(base_field, group, field_name)
+                                        
+                                        # Set its value if it exists
+                                        if field_name in values and field_name in self.entries:
+                                            entry = self.entries[field_name]
+                                            if isinstance(entry, ctk.CTkEntry):
+                                                entry.delete(0, 'end')
+                                                entry.insert(0, values[field_name])
+                                        break
+                            
+                            # Update available list
+                            self.dynamic_fields[base_field]['available'] = state['available']
+                            
+                    self.log(f"Loaded {len(values)} saved values", "param")
+                    
         except Exception as e:
             # Don't show error if file doesn't exist or is invalid
             pass
 
+    def get_field_groups(self):
+        """Return the field groups configuration"""
+        return [
+            {'base': 'e', 'label': 'Public Exponent (e)', 'add_fields': ['e1', 'e2'], 'has_add_button': True},
+            {'base': 'n', 'label': 'Modulus (n)', 'add_fields': ['n1', 'n2', 'n3'], 'has_add_button': True},
+            {'base': 'c', 'label': 'Ciphertext (c)', 'add_fields': ['c1', 'c2', 'c3'], 'has_add_button': True},
+            {'base': 'p', 'label': 'Prime p', 'add_fields': [], 'has_add_button': False},
+            {'base': 'q', 'label': 'Prime q', 'add_fields': [], 'has_add_button': False},
+            {'base': 'd', 'label': 'Private Key (d)', 'add_fields': ['dp', 'dq'], 'has_add_button': True},
+            {'base': 'phi', 'label': 'Phi (φ)', 'add_fields': [], 'has_add_button': False}
+        ]
+    
     def show_history(self):
         """Show previous results history"""
         if not self.results_history:
