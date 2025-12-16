@@ -6,9 +6,13 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from gui.app import RSACracker
-import tkinter as tk
+import customtkinter as ctk
 
-if __name__ == "__main__":
-    root = tk.Tk()
+def main():
+    """Main entry point"""
+    root = ctk.CTk()
     app = RSACracker(root)
     root.mainloop()
+
+if __name__ == "__main__":
+    main()

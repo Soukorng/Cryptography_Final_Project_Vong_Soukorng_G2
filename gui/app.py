@@ -1,13 +1,13 @@
-# gui/app.py - Modern RSA Cracker with Dark Blue Theme
+# gui/app.py - Modern RSA Cracker with CustomTkinter 5.2.2
 import threading
-import tkinter as tk
-from tkinter import ttk, filedialog
+from tkinter import filedialog
 import time
 import traceback
 import sys
 import os
 from datetime import datetime
 import json
+import customtkinter as ctk
 
 # Add the rsa_core directory to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'rsa_core'))
@@ -31,9 +31,13 @@ class RSACracker:
     def __init__(self, root):
         self.root = root
         self.root.title("RSA CRACKER TOOL")
-        self.root.geometry("1200x900")
+        self.root.geometry("1000x650")
         
-        # Secure dark blue color scheme
+        # Configure CustomTkinter theme
+        ctk.set_appearance_mode("dark")
+        ctk.set_default_color_theme("blue")
+        
+        # Custom dark blue color scheme
         self.colors = {
             'bg': '#0f172a',          # Dark blue background
             'card_bg': '#1e293b',     # Card background
@@ -49,13 +53,9 @@ class RSACracker:
             'border': '#334155',      # Border color
         }
         
-        # Configure window
-        self.root.configure(bg=self.colors['bg'])
-        
-        # Configure ttk style
-        self.style = ttk.Style()
-        self.style.theme_use('clam')
-        self.configure_styles()
+        # Configure window for responsiveness
+        self.root.grid_columnconfigure(0, weight=1)
+        self.root.grid_rowconfigure(0, weight=1)
         
         # Initialize variables
         self.stop_flag = False
@@ -70,359 +70,191 @@ class RSACracker:
         self.create_modern_ui()
         self.load_saved_values()
 
-    def configure_styles(self):
-        """Configure ttk styles for modern dark theme"""
-        # Configure frame styles
-        self.style.configure('Card.TFrame',
-                           background=self.colors['card_bg'],
-                           borderwidth=1,
-                           relief='solid')
-        
-        # Configure label styles
-        self.style.configure('Title.TLabel',
-                           background=self.colors['bg'],
-                           foreground=self.colors['accent'])
-        
-        self.style.configure('Subtitle.TLabel',
-                           background=self.colors['bg'],
-                           foreground=self.colors['text'])
-        
-        # Configure button styles
-        self.style.configure('Crack.TButton',
-                           background=self.colors['button_bg'],
-                           foreground=self.colors['button_fg'],
-                           borderwidth=0)
-        
-        self.style.map('Crack.TButton',
-                      background=[('active', '#0284c7')])
-        
-        self.style.configure('Action.TButton',
-                           background='#475569',
-                           foreground='white',
-                           borderwidth=0)
-        
-        # Configure scrollbar
-        self.style.configure('Custom.Vertical.TScrollbar',
-                           background='#334155',
-                           darkcolor='#334155',
-                           lightcolor='#334155',
-                           troughcolor=self.colors['card_bg'],
-                           bordercolor=self.colors['card_bg'],
-                           arrowcolor=self.colors['text'])
-
     def create_modern_ui(self):
-        """Create the modern dark-themed GUI"""
-        # Main container with two equal halves
-        main_container = ttk.Frame(self.root)
-        main_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
-        
-        # Create two equal columns
-        main_container.columnconfigure(0, weight=1)  # Left column (Input)
-        main_container.columnconfigure(1, weight=1)  # Right column (Results)
-        main_container.rowconfigure(0, weight=1)
+        """Create the modern dark-themed GUI with CustomTkinter"""
+        # Main container
+        main_container = ctk.CTkFrame(self.root, fg_color=self.colors['bg'])
+        main_container.pack(fill="both", expand=True, padx=20, pady=20)
+        main_container.grid_columnconfigure((0, 1), weight=1)
+        main_container.grid_rowconfigure(0, weight=1)
         
         # =================== LEFT COLUMN - INPUT ===================
-        left_container = ttk.Frame(main_container, style='Card.TFrame')
-        left_container.grid(row=0, column=0, sticky='nsew', padx=(0, 2))
-        left_container.columnconfigure(0, weight=1)
-        left_container.rowconfigure(1, weight=1)  # Make the scrollable area expandable
+        left_container = ctk.CTkFrame(main_container, 
+                                     fg_color=self.colors['card_bg'],
+                                     corner_radius=10)
+        left_container.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+        left_container.grid_columnconfigure(0, weight=1)
+        left_container.grid_rowconfigure(1, weight=1)
         
         # Header for input section
-        input_header = tk.Frame(left_container, bg=self.colors['card_bg'])
-        input_header.grid(row=0, column=0, sticky='ew', padx=20, pady=(25, 10))
+        input_title = ctk.CTkLabel(left_container,
+                                  text="🔧 INPUT PARAMETERS",
+                                  font=ctk.CTkFont(size=16, weight="bold"),
+                                  text_color=self.colors['accent'])
+        input_title.grid(row=0, column=0, sticky="w", padx=20, pady=(20, 10))
         
-        input_title = tk.Label(input_header,
-                            text="🔧 INPUT PARAMETERS",
-                            bg=self.colors['card_bg'],
-                            fg=self.colors['accent'],
-                            font=('Arial', 14, 'bold'))
-        input_title.pack(side=tk.LEFT)
+        # Create scrollable frame for input fields
+        self.input_scrollable_frame = ctk.CTkScrollableFrame(left_container,
+                                                           fg_color=self.colors['card_bg'])
+        self.input_scrollable_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
+        self.input_scrollable_frame.grid_columnconfigure(0, weight=1)
         
-        # Create a container for the scrollable area and scrollbar
-        scroll_container = ttk.Frame(left_container, style='Card.TFrame')
-        scroll_container.grid(row=1, column=0, sticky='nsew', padx=20, pady=(0, 10))
-        scroll_container.columnconfigure(0, weight=1)
-        scroll_container.rowconfigure(0, weight=1)
-        
-        # Create scrollable input area
-        input_canvas = tk.Canvas(scroll_container,
-                                bg=self.colors['card_bg'],
-                                highlightthickness=0)
-        input_scrollbar = ttk.Scrollbar(scroll_container,
-                                    orient='vertical',
-                                    command=input_canvas.yview,
-                                    style='Custom.Vertical.TScrollbar')
-        input_scrollable_frame = ttk.Frame(input_canvas, style='Card.TFrame')
-        
-        # Store canvas reference for later updates
-        self.input_canvas = input_canvas
-        self.input_scrollable_frame = input_scrollable_frame
-        
-        def update_scrollregion(event=None):
-            """Update the scrollregion of the canvas - FIXED VERSION"""
-            # Get the bbox of all items in the canvas (should be just our frame)
-            bbox = input_canvas.bbox("all")
-            if bbox:
-                # Only update if we have content
-                # Get the actual height of the content
-                content_height = input_scrollable_frame.winfo_reqheight()
-                canvas_height = input_canvas.winfo_height()
-                
-                # If content is taller than canvas, allow scrolling
-                # Otherwise, don't allow scrolling
-                if content_height > canvas_height:
-                    # Set scrollregion to exactly the content size
-                    input_canvas.configure(scrollregion=(0, 0, bbox[2], content_height))
-                    input_scrollbar.grid()  # Show scrollbar
-                else:
-                    # Hide scrollbar if content fits
-                    input_scrollbar.grid_remove()
-                    # Still set scrollregion to content bounds but disable scrolling
-                    input_canvas.configure(scrollregion=(0, 0, bbox[2], bbox[3]))
-        
-        # Bind the configure event to update scrollregion
-        input_scrollable_frame.bind("<Configure>", update_scrollregion)
-        
-        canvas_window = input_canvas.create_window((0, 0),
-                                                window=input_scrollable_frame,
-                                                anchor="nw")
-        
-        def configure_canvas(event):
-            """Configure canvas width when resized"""
-            input_canvas.itemconfig(canvas_window, width=event.width)
-            # Update scrollregion when canvas is resized
-            self.root.after(100, update_scrollregion)
-        
-        input_canvas.bind('<Configure>', configure_canvas)
-        input_canvas.configure(yscrollcommand=input_scrollbar.set)
-        
-        # Pack canvas and scrollbar SIDE BY SIDE in the middle area
-        input_canvas.grid(row=0, column=0, sticky='nsew')
-        input_scrollbar.grid(row=0, column=1, sticky='ns')
-        
-        # Make the canvas expandable
-        scroll_container.grid_rowconfigure(0, weight=1)
-        scroll_container.grid_columnconfigure(0, weight=1)
-        
-        # Create input fields in scrollable frame
-        self.create_input_fields(input_scrollable_frame)
-        
-        # =================== MOUSE WHEEL SCROLLING FOR LEFT SIDE ===================
-        def on_mousewheel(event):
-            """Handle mouse wheel scrolling for the left canvas"""
-            # Check if scrolling is actually needed
-            content_height = input_scrollable_frame.winfo_reqheight()
-            canvas_height = input_canvas.winfo_height()
-            
-            if content_height <= canvas_height:
-                return  # Don't scroll if content fits
-            
-            # For Windows and Mac
-            if event.num == 5 or event.delta < 0:
-                input_canvas.yview_scroll(1, "units")
-            elif event.num == 4 or event.delta > 0:
-                input_canvas.yview_scroll(-1, "units")
-        
-        def bind_mousewheel(widget):
-            """Bind mouse wheel events to a widget"""
-            # Windows and Mac
-            widget.bind("<MouseWheel>", on_mousewheel)
-            # Linux
-            widget.bind("<Button-4>", on_mousewheel)
-            widget.bind("<Button-5>", on_mousewheel)
-        
-        # Bind mouse wheel to both canvas and scrollable frame
-        bind_mousewheel(input_canvas)
-        bind_mousewheel(input_scrollable_frame)
-        
-        # Also bind to all children of the scrollable frame (input fields)
-        def bind_to_children(parent):
-            """Recursively bind mouse wheel to all child widgets"""
-            for child in parent.winfo_children():
-                bind_mousewheel(child)
-                if child.winfo_children():
-                    bind_to_children(child)
-        
-        # Bind to existing children
-        bind_to_children(input_scrollable_frame)
-        
-        # Bind to future children (when dynamic fields are added)
-        def on_child_added(event):
-            bind_to_children(input_scrollable_frame)
-            # Update scrollregion when new children are added
-            self.root.after(100, update_scrollregion)
-        
-        input_scrollable_frame.bind("<Configure>", on_child_added)
-        
-        # Add a method to update scrollregion that can be called externally
-        self.update_input_scrollregion = update_scrollregion
-        
-        # Initial scrollregion update
-        self.root.after(200, update_scrollregion)
-        # =================== END MOUSE WHEEL SCROLLING ===================
+        # Create input fields
+        self.create_input_fields(self.input_scrollable_frame)
         
         # =================== ACTION BUTTONS ===================
-        action_frame = tk.Frame(left_container, bg=self.colors['card_bg'])
-        action_frame.grid(row=2, column=0, sticky='ew', padx=20, pady=(0, 20))
+        action_frame = ctk.CTkFrame(left_container, fg_color=self.colors['card_bg'])
+        action_frame.grid(row=2, column=0, sticky="ew", padx=20, pady=(0, 20))
         
         # CRACK button (cyan)
-        self.btn_crack = tk.Button(action_frame,
-                                text="🚀 CRACK RSA",
-                                command=self.start_crack,
-                                bg=self.colors['button_bg'],
-                                fg=self.colors['button_fg'],
-                                font=('Arial', 12, 'bold'),
-                                padx=30,
-                                pady=15,
-                                bd=0,
-                                relief='flat',
-                                cursor='hand2')
-        self.btn_crack.pack(side=tk.LEFT, padx=(5, 10), pady=10)
+        self.btn_crack = ctk.CTkButton(action_frame,
+                                      text="🚀 CRACK RSA",
+                                      command=self.start_crack,
+                                      font=ctk.CTkFont(size=14, weight="bold"),
+                                      height=50,
+                                      fg_color=self.colors['button_bg'],
+                                      hover_color='#0284c7',
+                                      corner_radius=8)
+        self.btn_crack.pack(side="left", padx=(0, 10), pady=10)
         
         # Clear button
-        btn_clear = tk.Button(action_frame,
-                            text="🗑️ Clear All",
-                            command=self.clear_all,
-                            bg='#475569',
-                            fg='white',
-                            font=('Arial', 10),
-                            padx=20,
-                            pady=10,
-                            bd=0,
-                            relief='flat',
-                            cursor='hand2')
-        btn_clear.pack(side=tk.LEFT, padx=5, pady=10)
+        btn_clear = ctk.CTkButton(action_frame,
+                                 text="🗑️ Clear All",
+                                 command=self.clear_all,
+                                 font=ctk.CTkFont(size=12),
+                                 height=40,
+                                 fg_color='#475569',
+                                 hover_color='#374151',
+                                 corner_radius=8)
+        btn_clear.pack(side="left", padx=5, pady=10)
         
         # Save Values button
-        btn_save_vals = tk.Button(action_frame,
-                                text="💾 Save Values",
-                                command=self.save_values,
-                                bg='#475569',
-                                fg='white',
-                                font=('Arial', 10),
-                                padx=20,
-                                pady=10,
-                                bd=0,
-                                relief='flat',
-                                cursor='hand2')
-        btn_save_vals.pack(side=tk.LEFT, padx=5, pady=10)
+        btn_save_vals = ctk.CTkButton(action_frame,
+                                     text="💾 Save Values",
+                                     command=self.save_values,
+                                     font=ctk.CTkFont(size=12),
+                                     height=40,
+                                     fg_color='#475569',
+                                     hover_color='#374151',
+                                     corner_radius=8)
+        btn_save_vals.pack(side="left", padx=5, pady=10)
         
         # =================== RIGHT COLUMN - RESULTS ===================
-        right_container = ttk.Frame(main_container, style='Card.TFrame')
-        right_container.grid(row=0, column=1, sticky='nsew', padx=(2, 0))
+        right_container = ctk.CTkFrame(main_container,
+                                      fg_color=self.colors['card_bg'],
+                                      corner_radius=10)
+        right_container.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
+        right_container.grid_columnconfigure(0, weight=1)
+        right_container.grid_rowconfigure(1, weight=1)
         
         # Header for results section
-        results_header = tk.Frame(right_container, bg=self.colors['card_bg'])
-        results_header.pack(fill=tk.X, padx=20, pady=(20, 10))
+        results_header = ctk.CTkFrame(right_container, fg_color=self.colors['card_bg'])
+        results_header.grid(row=0, column=0, sticky="ew", padx=20, pady=(20, 10))
+        results_header.grid_columnconfigure(0, weight=1)
         
-        results_title = tk.Label(results_header,
-                            text="📊 RESULTS",
-                            bg=self.colors['card_bg'],
-                            fg=self.colors['accent'],
-                            font=('Arial', 14, 'bold'))
-        results_title.pack(side=tk.LEFT)
+        results_title = ctk.CTkLabel(results_header,
+                                   text="📊 RESULTS",
+                                   font=ctk.CTkFont(size=16, weight="bold"),
+                                   text_color=self.colors['accent'])
+        results_title.grid(row=0, column=0, sticky="w")
         
         # Results action buttons
-        results_actions = tk.Frame(results_header, bg=self.colors['card_bg'])
-        results_actions.pack(side=tk.RIGHT)
+        results_actions = ctk.CTkFrame(results_header, fg_color=self.colors['card_bg'])
+        results_actions.grid(row=0, column=1, sticky="e")
         
-        self.btn_copy = tk.Button(results_actions,
-                                text="📋 Copy",
-                                command=self.copy_results,
-                                bg='#3498db',
-                                fg='white',
-                                font=('Arial', 10),
-                                padx=15,
-                                pady=5,
-                                bd=0,
-                                relief='flat',
-                                cursor='hand2',
-                                state='disabled')
-        self.btn_copy.pack(side=tk.LEFT, padx=2)
+        self.btn_copy = ctk.CTkButton(results_actions,
+                                     text="📋 Copy",
+                                     command=self.copy_results,
+                                     font=ctk.CTkFont(size=12),
+                                     width=80,
+                                     height=32,
+                                     fg_color='#3498db',
+                                     hover_color='#2980b9',
+                                     corner_radius=8,
+                                     state="disabled")
+        self.btn_copy.pack(side="left", padx=2)
         
-        self.btn_save = tk.Button(results_actions,
-                                text="💾 Save",
-                                command=self.save_results,
-                                bg='#9b59b6',
-                                fg='white',
-                                font=('Arial', 10),
-                                padx=15,
-                                pady=5,
-                                bd=0,
-                                relief='flat',
-                                cursor='hand2',
-                                state='disabled')
-        self.btn_save.pack(side=tk.LEFT, padx=2)
+        self.btn_save = ctk.CTkButton(results_actions,
+                                     text="💾 Save",
+                                     command=self.save_results,
+                                     font=ctk.CTkFont(size=12),
+                                     width=80,
+                                     height=32,
+                                     fg_color='#9b59b6',
+                                     hover_color='#8e44ad',
+                                     corner_radius=8,
+                                     state="disabled")
+        self.btn_save.pack(side="left", padx=2)
         
-        self.btn_history = tk.Button(results_actions,
-                                text="📜 History",
-                                command=self.show_history,
-                                bg='#475569',
-                                fg='white',
-                                font=('Arial', 10),
-                                padx=15,
-                                pady=5,
-                                bd=0,
-                                relief='flat',
-                                cursor='hand2')
-        self.btn_history.pack(side=tk.LEFT, padx=2)
+        self.btn_history = ctk.CTkButton(results_actions,
+                                        text="📜 History",
+                                        command=self.show_history,
+                                        font=ctk.CTkFont(size=12),
+                                        width=80,
+                                        height=32,
+                                        fg_color='#475569',
+                                        hover_color='#374151',
+                                        corner_radius=8)
+        self.btn_history.pack(side="left", padx=2)
         
         # Results text area
-        results_text_frame = ttk.Frame(right_container, style='Card.TFrame')
-        results_text_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 20))
+        results_text_frame = ctk.CTkFrame(right_container,
+                                         fg_color=self.colors['card_bg'])
+        results_text_frame.grid(row=1, column=0, sticky="nsew", padx=20, pady=(0, 20))
+        results_text_frame.grid_columnconfigure(0, weight=1)
+        results_text_frame.grid_rowconfigure(0, weight=1)
         
         # Create custom text widget with scrollbar
-        text_frame = tk.Frame(results_text_frame, bg=self.colors['input_bg'])
-        text_frame.pack(fill=tk.BOTH, expand=True)
+        self.results_text = ctk.CTkTextbox(results_text_frame,
+                                          font=ctk.CTkFont(family="Consolas", size=12),
+                                          fg_color=self.colors['input_bg'],
+                                          text_color=self.colors['input_fg'],
+                                          corner_radius=8)
+        self.results_text.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
         
-        self.results_text = tk.Text(text_frame,
-                                wrap=tk.WORD,
-                                font=('Consolas', 10),
-                                bg=self.colors['input_bg'],
-                                fg=self.colors['input_fg'],
-                                insertbackground=self.colors['accent'],
-                                relief='flat',
-                                padx=15,
-                                pady=15)
-        
-        text_scrollbar = ttk.Scrollbar(text_frame,
-                                    orient='vertical',
-                                    command=self.results_text.yview,
-                                    style='Custom.Vertical.TScrollbar')
-        
-        self.results_text.configure(yscrollcommand=text_scrollbar.set)
-        
-        self.results_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        text_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        # Configure text tags - UPDATED: Added ascii_red tag
-        self.results_text.tag_config("success", foreground=self.colors['success'], font=('Consolas', 10, 'bold'))
+        # Configure text tags
+        self.results_text.tag_config("success", foreground=self.colors['success'])
         self.results_text.tag_config("error", foreground=self.colors['error'])
         self.results_text.tag_config("warning", foreground=self.colors['warning'])
-        self.results_text.tag_config("flag", foreground=self.colors['accent'], font=('Consolas', 12, 'bold'))
-        self.results_text.tag_config("header", font=('Consolas', 11, 'bold'))
+        self.results_text.tag_config("flag", foreground=self.colors['accent'])
+        self.results_text.tag_config("header", foreground=self.colors['accent'])
         self.results_text.tag_config("param", foreground='#94a3b8')
-        self.results_text.tag_config("ascii_red", foreground='#ff6b6b', font=('Consolas', 10, 'bold'))  # Red for ASCII
-        self.results_text.tag_config("history_result", foreground='#f8a5c2', font=('Consolas', 10))  # Pink color
+        self.results_text.tag_config("ascii_red", foreground='#ff6b6b')
+        self.results_text.tag_config("history_result", foreground='#f8a5c2')
         
         # Status bar at bottom of main window
-        status_frame = ttk.Frame(main_container, style='Card.TFrame')
-        status_frame.grid(row=1, column=0, columnspan=2, sticky='ew', pady=(10, 0))
+        status_frame = ctk.CTkFrame(main_container,
+                                   fg_color=self.colors['card_bg'],
+                                   corner_radius=10)
+        status_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        status_frame.grid_columnconfigure(0, weight=1)
         
-        self.status_label = tk.Label(status_frame,
-                                text="Ready",
-                                bg=self.colors['card_bg'],
-                                fg=self.colors['text'],
-                                font=('Arial', 9))
-        self.status_label.pack(side=tk.LEFT, padx=20, pady=10)
+        self.status_label = ctk.CTkLabel(status_frame,
+                                        text="Ready",
+                                        font=ctk.CTkFont(size=11),
+                                        text_color=self.colors['text'])
+        self.status_label.grid(row=0, column=0, sticky="w", padx=20, pady=10)
         
-        self.time_label = tk.Label(status_frame,
-                                text="",
-                                bg=self.colors['card_bg'],
-                                fg=self.colors['text'],
-                                font=('Consolas', 9))
-        self.time_label.pack(side=tk.RIGHT, padx=20, pady=10)
+        self.time_label = ctk.CTkLabel(status_frame,
+                                      text="",
+                                      font=ctk.CTkFont(family="Consolas", size=11),
+                                      text_color=self.colors['text'])
+        self.time_label.grid(row=0, column=1, sticky="e", padx=20, pady=10)
         
+        # Make all containers expandable
+        self.make_responsive()
+    
+    def make_responsive(self):
+        """Configure grid weights for responsiveness"""
+        # Configure main window
+        self.root.grid_columnconfigure(0, weight=1)
+        self.root.grid_rowconfigure(0, weight=1)
+        
+        # Update the input scrollable frame to expand
+        if hasattr(self, 'input_scrollable_frame'):
+            self.input_scrollable_frame.grid_rowconfigure(0, weight=1)
+            self.input_scrollable_frame.grid_columnconfigure(0, weight=1)
+
     def create_input_fields(self, parent):
         """Create input fields with dynamic expansion"""
         # Define main fields and their additional fields
@@ -473,8 +305,8 @@ class RSACracker:
         
         for i, group in enumerate(field_groups):
             # Create frame for each field group
-            field_frame = ttk.Frame(parent, style='Card.TFrame')
-            field_frame.pack(fill=tk.X, padx=10, pady=8)
+            field_frame = ctk.CTkFrame(parent, fg_color=self.colors['card_bg'])
+            field_frame.pack(fill="x", padx=10, pady=8)
             
             # Main field
             self.create_field_row(field_frame, group['base'], group['label'], group)
@@ -490,57 +322,43 @@ class RSACracker:
     def create_field_row(self, parent, field_name, label, group):
         """Create a single field row with label and entry"""
         # Create a frame to hold everything
-        row_frame = tk.Frame(parent, bg=self.colors['card_bg'])
-        row_frame.pack(fill=tk.X, padx=(0, 10))
+        row_frame = ctk.CTkFrame(parent, fg_color=self.colors['card_bg'])
+        row_frame.pack(fill="x", padx=(0, 10))
+        row_frame.grid_columnconfigure(1, weight=1)
         
         # Label (left side)
-        lbl_frame = tk.Frame(row_frame, bg=self.colors['card_bg'])
-        lbl_frame.pack(side=tk.LEFT, padx=(10, 5))
+        lbl = ctk.CTkLabel(row_frame,
+                          text=label + ":",
+                          font=ctk.CTkFont(size=12, weight="bold"),
+                          text_color=self.colors['text'],
+                          anchor="w",
+                          width=160)
+        lbl.grid(row=0, column=0, sticky="w", padx=(0, 0), pady=5)
         
-        lbl = tk.Label(lbl_frame,
-                      text=label + ":",
-                      bg=self.colors['card_bg'],
-                      fg=self.colors['text'],
-                      font=('Arial', 10, 'bold'),
-                      anchor='w',
-                      width=15)
-        lbl.pack(anchor='w')
-        
-        # Entry field with rounded corners (center)
-        entry_frame = tk.Frame(row_frame,
-                              bg=self.colors['input_bg'],
-                              highlightbackground=self.colors['border'],
-                              highlightthickness=2)
-        entry_frame.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
-        
-        entry = tk.Entry(entry_frame,
-                        font=('Consolas', 10),
-                        bg=self.colors['input_bg'],
-                        fg=self.colors['input_fg'],
-                        insertbackground=self.colors['accent'],
-                        relief='flat',
-                        bd=0)
-        entry.pack(fill=tk.BOTH, padx=12, pady=8, ipady=4)
+        # Entry field
+        entry = ctk.CTkEntry(row_frame,
+                            font=ctk.CTkFont(family="Consolas", size=12),
+                            fg_color=self.colors['input_bg'],
+                            text_color=self.colors['input_fg'],
+                            border_color=self.colors['border'],
+                            border_width=2,
+                            corner_radius=6)
+        entry.grid(row=0, column=1, sticky="ew", padx=0, pady=5)
         
         self.entries[field_name] = entry
         
         # Add button for fields with additional options (right side)
         if group['has_add_button']:
-            btn_frame = tk.Frame(row_frame, bg=self.colors['card_bg'])
-            btn_frame.pack(side=tk.RIGHT, padx=(0, 5))
-            
-            add_btn = tk.Button(btn_frame,
-                              text="+ Add",
-                              command=lambda f=field_name, g=group: self.add_dynamic_field(f, g),
-                              bg=self.colors['accent'],
-                              fg='white',
-                              font=('Arial', 9, 'bold'),
-                              padx=12,
-                              pady=4,
-                              bd=0,
-                              relief='flat',
-                              cursor='hand2')
-            add_btn.pack()
+            add_btn = ctk.CTkButton(row_frame,
+                                  text="+ Add",
+                                  command=lambda f=field_name, g=group: self.add_dynamic_field(f, g),
+                                  font=ctk.CTkFont(size=11, weight="bold"),
+                                  width=70,
+                                  height=30,
+                                  fg_color=self.colors['accent'],
+                                  hover_color='#0284c7',
+                                  corner_radius=6)
+            add_btn.grid(row=0, column=2, padx=(5, 0), pady=5)
 
     def add_dynamic_field(self, base_field, group):
         """Add a dynamic field below the base field"""
@@ -550,52 +368,42 @@ class RSACracker:
         # Get next available field
         field_name = self.dynamic_fields[base_field]['available'].pop(0)
         
-        # Create the dynamic field
-        dynamic_frame = tk.Frame(self.dynamic_fields[base_field]['frame'], bg=self.colors['card_bg'])
-        dynamic_frame.pack(fill=tk.X, padx=(40, 10), pady=(5, 0))  # Indented
+        # Create the dynamic field (indented)
+        dynamic_frame = ctk.CTkFrame(self.dynamic_fields[base_field]['frame'], 
+                                    fg_color=self.colors['card_bg'])
+        dynamic_frame.pack(fill="x", padx=(40, 10), pady=(2, 0))
+        dynamic_frame.grid_columnconfigure(1, weight=1)
         
         # Label (indented)
-        lbl_frame = tk.Frame(dynamic_frame, bg=self.colors['card_bg'])
-        lbl_frame.pack(side=tk.LEFT, padx=(0, 5))
-        
-        lbl = tk.Label(lbl_frame,
-                      text=f"{field_name}:",
-                      bg=self.colors['card_bg'],
-                      fg=self.colors['text'],
-                      font=('Arial', 9),
-                      anchor='w',
-                      width=13)
-        lbl.pack(anchor='w')
+        lbl = ctk.CTkLabel(dynamic_frame,
+                          text=f"{field_name}:",
+                          font=ctk.CTkFont(size=11),
+                          text_color=self.colors['text'],
+                          anchor="w",
+                          width=115)
+        lbl.grid(row=0, column=0, sticky="w", padx=(0, 5), pady=2)
         
         # Entry
-        entry_frame = tk.Frame(dynamic_frame,
-                              bg=self.colors['input_bg'],
-                              highlightbackground='#475569',
-                              highlightthickness=1)
-        entry_frame.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
-        
-        entry = tk.Entry(entry_frame,
-                        font=('Consolas', 9),
-                        bg=self.colors['input_bg'],
-                        fg=self.colors['input_fg'],
-                        insertbackground=self.colors['accent'],
-                        relief='flat',
-                        bd=0)
-        entry.pack(fill=tk.BOTH, padx=10, pady=6, ipady=3)
+        entry = ctk.CTkEntry(dynamic_frame,
+                            font=ctk.CTkFont(family="Consolas", size=11),
+                            fg_color=self.colors['input_bg'],
+                            text_color=self.colors['input_fg'],
+                            border_color='#475569',
+                            border_width=1,
+                            corner_radius=4)
+        entry.grid(row=0, column=1, sticky="ew", padx=0, pady=2)
         
         # Remove button (X)
-        remove_btn = tk.Button(dynamic_frame,
-                             text="×",
-                             command=lambda f=field_name, df=dynamic_frame: self.remove_dynamic_field(f, df),
-                             bg='#475569',
-                             fg='white',
-                             font=('Arial', 9, 'bold'),
-                             padx=8,
-                             pady=0,
-                             bd=0,
-                             relief='flat',
-                             cursor='hand2')
-        remove_btn.pack(side=tk.RIGHT, padx=(5, 0))
+        remove_btn = ctk.CTkButton(dynamic_frame,
+                                 text="×",
+                                 command=lambda f=field_name, df=dynamic_frame: self.remove_dynamic_field(f, df),
+                                 font=ctk.CTkFont(size=12, weight="bold"),
+                                 width=30,
+                                 height=25,
+                                 fg_color='#475569',
+                                 hover_color='#374151',
+                                 corner_radius=4)
+        remove_btn.grid(row=0, column=2, padx=(5, 0), pady=2)
         
         # Store the entry
         self.entries[field_name] = entry
@@ -658,8 +466,8 @@ class RSACracker:
         self.results_text.see("end")
         
         # Enable action buttons
-        self.btn_copy.config(state='normal')
-        self.btn_save.config(state='normal')
+        self.btn_copy.configure(state="normal")
+        self.btn_save.configure(state="normal")
 
     def clear_all(self):
         """Clear all inputs and results"""
@@ -667,11 +475,11 @@ class RSACracker:
         
         # Clear all entry fields
         for entry in self.entries.values():
-            if isinstance(entry, tk.Entry):
-                entry.delete(0, tk.END)
+            if isinstance(entry, ctk.CTkEntry):
+                entry.delete(0, 'end')
         
         # Clear results
-        self.results_text.delete(1.0, tk.END)
+        self.results_text.delete("1.0", "end")
         
         # Remove all dynamic fields
         for base_field in list(self.dynamic_fields.keys()):
@@ -679,11 +487,11 @@ class RSACracker:
                 self.remove_dynamic_field(field_data['name'], field_data['frame'])
         
         # Reset status
-        self.status_label.config(text="Ready")
-        self.time_label.config(text="")
-        self.btn_crack.config(state='normal', text="🚀 CRACK RSA")
-        self.btn_copy.config(state='disabled')
-        self.btn_save.config(state='disabled')
+        self.status_label.configure(text="Ready")
+        self.time_label.configure(text="")
+        self.btn_crack.configure(state="normal", text="🚀 CRACK RSA")
+        self.btn_copy.configure(state="disabled")
+        self.btn_save.configure(state="disabled")
         self.stop_flag = False
 
     def start_crack(self):
@@ -692,7 +500,7 @@ class RSACracker:
             return
         
         self.stop_flag = False
-        self.results_text.delete(1.0, tk.END)
+        self.results_text.delete("1.0", "end")
         self.start_time = time.time()
         
         self.log("=" * 70, "header")
@@ -701,8 +509,8 @@ class RSACracker:
         self.log(f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         self.log("")
         
-        self.btn_crack.config(state='disabled', text="⏳ PROCESSING...")
-        self.status_label.config(text="Running attacks...")
+        self.btn_crack.configure(state="disabled", text="⏳ PROCESSING...")
+        self.status_label.configure(text="Running attacks...")
         
         # Start cracking in separate thread
         threading.Thread(target=self.crack_thread, daemon=True).start()
@@ -710,7 +518,7 @@ class RSACracker:
 
     def timer_thread(self):
         """Update timer in status bar"""
-        while not self.stop_flag and self.btn_crack["state"] == "disabled":
+        while not self.stop_flag and self.btn_crack.cget("state") == "disabled":
             elapsed = time.time() - self.start_time
             m, s = divmod(elapsed, 60)
             h, m = divmod(m, 60)
@@ -722,7 +530,7 @@ class RSACracker:
             else:
                 time_str = f"{s:.1f}s"
             
-            self.root.after(0, self.time_label.config, {'text': f"Elapsed: {time_str}"})
+            self.root.after(0, self.time_label.configure, {'text': f"Elapsed: {time_str}"})
             time.sleep(0.1)
 
     def crack_thread(self):
@@ -820,12 +628,12 @@ class RSACracker:
                     # Update recovered values for display
                     if n_found and not n:
                         n = n_found
-                        self.log(f"   • Recovered n = {n.bit_length()}-bit")
+                        self.log(f"   • Recovered n = {n_found.bit_length()}-bit")
                     
                     if p_found and q_found:
                         p = p_found
                         q = q_found
-                        self.log(f"   • Recovered p = {p.bit_length()}-bit, q = {q.bit_length()}-bit")
+                        self.log(f"   • Recovered p = {p_found.bit_length()}-bit, q = {q_found.bit_length()}-bit")
                 else:
                     self.log("   ❌ Decryption with φ(n) failed", "warning")
             
@@ -1002,7 +810,7 @@ class RSACracker:
                 self.log("🎉 DECRYPTION SUCCESSFUL!", "success")
                 self.log("=" * 70, "header")
                 
-                self.log("\n📖 DECRYPTED MESSAGE:")
+                self.log("📖 DECRYPTED MESSAGE:", "header")
                 self.log("-" * 40)
                 # UPDATED: Use ascii_red tag for ASCII result
                 self.log(f"ASCII:  {ascii_text}", "ascii_red")
@@ -1041,14 +849,14 @@ class RSACracker:
         finally:
             if not self.stop_flag:
                 elapsed = time.time() - self.start_time
-                self.root.after(0, self.btn_crack.config, {'state': 'normal', 'text': '🚀 CRACK RSA'})
-                self.root.after(0, self.status_label.config, {'text': 'Ready'})
-                self.root.after(0, self.time_label.config, {'text': f'Completed in {elapsed:.2f}s'})
+                self.root.after(0, lambda: self.btn_crack.configure(state="normal", text="🚀 CRACK RSA"))
+                self.root.after(0, lambda: self.status_label.configure(text="Ready"))
+                self.root.after(0, lambda: self.time_label.configure(text=f"Completed in {elapsed:.2f}s"))
                 self.log(f"\n⏱️  Total time: {elapsed:.2f} seconds", "param")
 
     def copy_results(self):
         """Copy results to clipboard"""
-        content = self.results_text.get(1.0, tk.END).strip()
+        content = self.results_text.get("1.0", "end").strip()
         if content:
             self.root.clipboard_clear()
             self.root.clipboard_append(content)
@@ -1056,7 +864,7 @@ class RSACracker:
 
     def save_results(self):
         """Save results to file"""
-        content = self.results_text.get(1.0, tk.END).strip()
+        content = self.results_text.get("1.0", "end").strip()
         if not content:
             return
         
@@ -1083,7 +891,7 @@ class RSACracker:
         try:
             values = {}
             for key, entry in self.entries.items():
-                if isinstance(entry, tk.Entry):
+                if isinstance(entry, ctk.CTkEntry):
                     value = entry.get().strip()
                     if value:
                         values[key] = value
@@ -1104,8 +912,8 @@ class RSACracker:
                     values = json.load(f)
                 
                 for key, value in values.items():
-                    if key in self.entries and isinstance(self.entries[key], tk.Entry):
-                        self.entries[key].delete(0, tk.END)
+                    if key in self.entries and isinstance(self.entries[key], ctk.CTkEntry):
+                        self.entries[key].delete(0, 'end')
                         self.entries[key].insert(0, value)
                 
                 self.log(f"Loaded {len(values)} saved values", "param")
@@ -1124,7 +932,8 @@ class RSACracker:
         self.log("📜 RESULTS HISTORY", "header")
         self.log("=" * 70, "header")
         
-        for i, entry in enumerate(reversed(self.results_history[-10:]), 1):  # Show last 5
+        for i, entry in enumerate(reversed(self.results_history[-10:]), 1):  # Show last 10
             self.log(f"\n[{i}] {entry['timestamp'].split('T')[0]} {entry['timestamp'].split('T')[1][:8]}")
             self.log(f"   Result: {entry['result'][:100]}{'...' if len(entry['result']) > 100 else ''}", "history_result")
+
 
