@@ -1,8 +1,3 @@
-# rsa_core/utils.py
-"""
-Secure Utility Functions for RSA Operations
-"""
-
 import math
 from typing import Tuple
 import gmpy2

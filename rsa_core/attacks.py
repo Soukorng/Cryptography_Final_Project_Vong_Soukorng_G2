@@ -1,4 +1,3 @@
-# rsa_core/attacks.py
 import math
 import gmpy2
 from typing import Optional, List, Callable
@@ -253,7 +252,7 @@ def even_n_attack(n: int, e: int, c: int) -> Optional[int]:
 def massive_rsa_attack(n: int, e: int, c: int, 
                       log_callback: Optional[Callable] = None) -> Optional[int]:
     """
-    Attack when n is prime (not a proper RSA modulus)[citation:1].
+    Attack when n is prime (not a proper RSA modulus).
     This is a catastrophic key generation error.
     """
     def log(msg: str):
@@ -523,9 +522,6 @@ def common_modulus_attack(n: int, e1: int, e2: int, c1: int, c2: int, log_callba
     if g != 1:
         log(f"[Common Modulus] Extended Euclidean failed: gcd = {g}")
         return None
-    
-    # We have a*e1 + b*e2 = 1
-    # So m = c1^a * c2^b mod n
     
     # Need to handle negative exponents
     if a < 0:

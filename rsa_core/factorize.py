@@ -1,9 +1,9 @@
-# rsa_core/factorize.py (TURBO 2025 EDITION - Secure)
 import math
 import random
 import gmpy2
 import threading
 import time
+import socket
 from typing import Optional, Tuple
 from factordb.factordb import FactorDB
 
@@ -14,12 +14,8 @@ gmpy2.get_context().precision = 4096
 #                 SECURE FACTORDB INTEGRATION
 # ==========================================================
 def factor_from_factordb(n: int, timeout: int = 15) -> Tuple[Optional[int], Optional[int]]:
-    
+
     try:
-        # Security check: Don't query for very small numbers
-        if n < 1000:
-            return None, None  # Too small, use local methods
-        
         # Security check: Limit bit size
         if n.bit_length() > 4096:
             print(f"[FactorDB Security] Refusing to query {n.bit_length()}-bit number (max 4096 bits)")
@@ -30,7 +26,6 @@ def factor_from_factordb(n: int, timeout: int = 15) -> Tuple[Optional[int], Opti
         f = FactorDB(n)
         try:
             # Secure timeout for network operations
-            import socket
             socket.setdefaulttimeout(timeout)
             f.connect()
         except Exception as e:

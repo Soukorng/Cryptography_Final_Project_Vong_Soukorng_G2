@@ -1,4 +1,3 @@
-# gui/app.py - Modern RSA Cracker with CustomTkinter 5.2.2
 import threading
 from tkinter import filedialog
 import time
@@ -15,7 +14,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'rsa_core'))
 # Import from rsa_core
 try:
     from rsa_core import (
-        int_to_bytes, bytes_to_hex, try_decode,
+        int_to_bytes, try_decode,
         rsa_decrypt, compute_d, smart_factor_n,
         wiener_attack, low_exponent_attack, rsa_crt_decrypt,
         double_encryption_attack, massive_rsa_attack,
@@ -540,7 +539,7 @@ class RSACracker:
             time.sleep(0.1)
 
     def crack_thread(self):
-        """Main cracking logic - SECURE VERSION"""
+        """Main cracking logic"""
         try:
             # Collect all parameters with validation
             params = {}
@@ -806,11 +805,11 @@ class RSACracker:
                 hex_text = raw_bytes.hex()
                 
                 self.log("=" * 70, "header")
-                self.log("🎉 DECRYPTION SUCCESSFUL!", "success")
+                self.log(" 🎉 DECRYPTION SUCCESSFUL!", "success")
                 self.log("=" * 70, "header")
                 
-                self.log("📖 DECRYPTED MESSAGE:", "header")
-                self.log("-" * 40)
+                self.log(" 📖 DECRYPTED MESSAGE:", "header")
+                self.log("-" * 40, "header")
                 # UPDATED: Use ascii_red tag for ASCII result
                 self.log(f"ASCII:  {ascii_text}", "ascii_red")
                 self.log(f"HEX:    {hex_text}")
@@ -830,10 +829,10 @@ class RSACracker:
                 self.results_history.append(result_entry)
                 
             else:
-                self.log("❌ DECRYPTION FAILED", "error")
+                self.log(" ❌ DECRYPTION FAILED", "error")
                 self.log("-" * 40)
                 self.log("No attack succeeded with the given parameters.")
-                self.log("\n💡 SUGGESTIONS:")
+                self.log(" 💡 SUGGESTIONS:")
                 self.log("  • Ensure all required parameters are provided")
                 self.log("  • Try adding more ciphertexts for broadcast attacks")
                 self.log("  • Check if modulus can be factored online")
@@ -842,7 +841,7 @@ class RSACracker:
             self.log("=" * 70, "header")
             
         except Exception as ex:
-            self.log(f"\n❌ ERROR: {str(ex)}", "error")
+            self.log(f" ❌ ERROR: {str(ex)}", "error")
             self.log(traceback.format_exc(), "error")
             
         finally:
@@ -851,7 +850,7 @@ class RSACracker:
                 self.root.after(0, lambda: self.btn_crack.configure(state="normal", text="🚀 CRACK RSA"))
                 self.root.after(0, lambda: self.status_label.configure(text="Ready"))
                 self.root.after(0, lambda: self.time_label.configure(text=f"Completed in {elapsed:.2f}s"))
-                self.log(f"\n⏱️  Total time: {elapsed:.2f} seconds", "param")
+                self.log(f" ⏱️  Total time: {elapsed:.2f} seconds", "param")
 
     def copy_results(self):
         """Copy results to clipboard"""
@@ -859,7 +858,7 @@ class RSACracker:
         if content:
             self.root.clipboard_clear()
             self.root.clipboard_append(content)
-            self.log("\n📋 Results copied to clipboard!", "success")
+            self.log(" 📋 Results copied to clipboard!", "success")
 
     def save_results(self):
         """Save results to file"""
@@ -881,9 +880,9 @@ class RSACracker:
             try:
                 with open(filename, 'w', encoding='utf-8') as f:
                     f.write(content)
-                self.log(f"\n💾 Results saved to: {filename}", "success")
+                self.log(f" 💾 Results saved to: {filename}", "success")
             except Exception as e:
-                self.log(f"\n❌ Error saving file: {str(e)}", "error")
+                self.log(f" ❌ Error saving file: {str(e)}", "error")
 
     def save_values(self):
         """Save current input values to file"""
@@ -907,10 +906,10 @@ class RSACracker:
             with open(self.saved_values_file, 'w', encoding='utf-8') as f:
                 json.dump(values, f, indent=2)
             
-            self.log(f"\n💾 Input values saved successfully!", "success")
+            self.log(f" 💾 Input values saved successfully!", "success")
             
         except Exception as e:
-            self.log(f"\n❌ Error saving values: {str(e)}", "error")
+            self.log(f" ❌ Error saving values: {str(e)}", "error")
 
     def load_saved_values(self):
         """Load saved values from file"""
@@ -976,15 +975,15 @@ class RSACracker:
     def show_history(self):
         """Show previous results history"""
         if not self.results_history:
-            self.log("\n📜 No history available yet", "warning")
+            self.log(" 📜 No history available yet", "warning")
             return
         
         self.log("=" * 70, "header")
-        self.log("📜 RESULTS HISTORY", "header")
+        self.log(" 📜 RESULTS HISTORY", "header")
         self.log("=" * 70, "header")
         
         for i, entry in enumerate(reversed(self.results_history[-10:]), 1):  # Show last 10
-            self.log(f"\n[{i}] {entry['timestamp'].split('T')[0]} {entry['timestamp'].split('T')[1][:8]}")
+            self.log(f"[{i}] {entry['timestamp'].split('T')[0]} {entry['timestamp'].split('T')[1][:8]}")
             self.log(f"   Result: {entry['result'][:100]}{'...' if len(entry['result']) > 100 else ''}", "history_result")
 
 

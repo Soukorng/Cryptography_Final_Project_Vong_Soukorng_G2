@@ -2,8 +2,8 @@ from .factorize import smart_factor_n, smart_factor_phi
 from .compute_d import compute_d_from_phi, compute_d
 from .utils import mod_inverse
 from typing import Optional, Tuple
-from math import isqrt
 import gmpy2
+import traceback
 
 # rsa_core/decrypt.py
 def rsa_decrypt(c: int, d: int, n: int) -> int:
@@ -34,19 +34,6 @@ def rsa_crt_decrypt(c: int, p: int, q: int, dp: int, dq: int, verbose=False) -> 
         print(f"[CRT] m2 = c^dq mod q = {c}^{dq} mod {q} = {m2}")
     
     # Step 3: Compute q_inv = q^(-1) mod p
-    def mod_inverse(a, m):
-        # Extended Euclidean Algorithm
-        def egcd(a, b):
-            if a == 0:
-                return b, 0, 1
-            g, y, x = egcd(b % a, a)
-            return g, x - (b // a) * y, y
-        
-        g, x, _ = egcd(a, m)
-        if g != 1:
-            raise ValueError(f"No modular inverse for {a} mod {m}")
-        return x % m
-    
     q_inv = mod_inverse(q, p)
     if verbose:
         print(f"[CRT] q_inv = q^(-1) mod p = {q}^(-1) mod {p} = {q_inv}")
@@ -145,81 +132,9 @@ def decrypt_with_phi(e: int = None, phi: int = None, n: int = None,
                 log(f"   • Decrypted message = {m.bit_length()}-bit")
                 
                 return m, n, p, q
-            
-            # =================== CASE 3: SPECIAL φ STRUCTURE ===================
-            # If smart_factor_phi failed, try direct quadratic solving
-            # This handles cases like p = 2q + 1 from the walkthrough
-            log("   • Case 3: Trying direct quadratic solving for special φ structure...")
-            
-            # We know φ = (p-1)(q-1)
-            # Let's try to solve for p and q directly
-            
-            # Method: Since φ = pq - p - q + 1
-            # Let s = p + q, then φ = n - s + 1, so n = φ + s - 1
-            # Also, (p - q)² = s² - 4n = s² - 4(φ + s - 1) = s² - 4s - 4φ + 4
-            
-            # We need s such that s² - 4s - 4φ + 4 is a perfect square
-            
-            
-            
-            # Compute k = (e*d - 1) // φ
-            ed_minus_1 = e * d - 1
-            if ed_minus_1 % phi == 0:
-                k = ed_minus_1 // phi
-                log(f"   • k = (e*d - 1)/φ = {k}")
-            
-            # Estimate s ≈ 2√φ (since p and q are roughly √n and n ≈ φ)
-            sqrt_phi = gmpy2.isqrt(phi)
-            
-            # Search for s in a reasonable range
-            # s = p + q should be even (since p and q are odd)
-            s_start = 2 * sqrt_phi - 10000
-            s_end = 2 * sqrt_phi + 10000
-            
-            # Ensure s_start is even and positive
-            if s_start % 2 != 0:
-                s_start += 1
-            if s_start < 2:
-                s_start = 2
-            
-            log(f"   • Searching for s in range [{s_start}, {s_end}] (step 2)")
-            
-            for s in range(s_start, s_end + 1, 2):
-                # Compute discriminant
-                disc = s*s - 4*s - 4*phi + 4
-                
-                if disc < 0:
-                    continue
-                
-                # Check if perfect square
-                sqrt_disc = gmpy2.isqrt(disc)
-                if sqrt_disc * sqrt_disc != disc:
-                    continue
-                
-                # Found valid s
-                p_candidate = (s + sqrt_disc) // 2
-                q_candidate = (s - sqrt_disc) // 2
-                
-                # Check if they're prime
-                if gmpy2.is_prime(p_candidate) and gmpy2.is_prime(q_candidate):
-                    # Verify φ
-                    if (p_candidate - 1) * (q_candidate - 1) == phi:
-                        n_candidate = p_candidate * q_candidate
-                        log(f"   ✓ Found p and q via quadratic solving!")
-                        log(f"   • p = {p_candidate.bit_length()}-bit, q = {q_candidate.bit_length()}-bit")
-                        log(f"   • n = {n_candidate.bit_length()}-bit")
-                        
-                        # Decrypt
-                        m = pow(c, d, n_candidate)
-                        log(f"   • Decrypted message = {m.bit_length()}-bit")
-                        
-                        return m, n_candidate, p_candidate, q_candidate
-            
-            log("   ❌ All methods failed to recover n from φ")
-            
+
         except Exception as ex:
-            log(f"   ❌ Error in Case 2/3: {ex}")
-            import traceback
+            log(f"   ❌ Error in Case 2: {ex}")
             log(traceback.format_exc())
             return None, None, None, None
     
@@ -230,11 +145,7 @@ def decrypt_with_phi(e: int = None, phi: int = None, n: int = None,
 
 def decrypt_with_pq(c: int, p: int, q: int, e: int = None, d: int = None, n: int = None, 
                    log_callback=None):
-    """
-    Standard RSA decryption with p and q.
-    If n is not provided, compute n = p * q.
-    If d is not provided but e is, compute d from p, q, e.
-    """
+
     def log(msg):
         if log_callback:
             log_callback(msg)
@@ -280,17 +191,7 @@ def decrypt_with_pq(c: int, p: int, q: int, e: int = None, d: int = None, n: int
         return None, None, None
     
 def recover_prime_from_n(n: int, known_prime: int, log_callback=None) -> Optional[int]:
-    """
-    Recover the other prime when n and one prime are given.
     
-    Args:
-        n: RSA modulus
-        known_prime: Either p or q
-        log_callback: Optional logging function
-    
-    Returns:
-        The other prime or None
-    """
     def log(msg: str):
         if log_callback:
             log_callback(msg)
@@ -322,13 +223,7 @@ def recover_prime_from_n(n: int, known_prime: int, log_callback=None) -> Optiona
 
 def decrypt_with_n_and_prime(c: int, n: int, prime: int, e: int = None, d: int = None, 
                            log_callback=None) -> Tuple[Optional[int], Optional[int], Optional[int]]:
-    """
-    Decrypt when we have n and one prime (p or q).
-    Automatically recovers the other prime and decrypts.
-    
-    Returns:
-        Tuple of (message, n, d) or (None, None, None)
-    """
+
     def log(msg: str):
         if log_callback:
             log_callback(msg)
