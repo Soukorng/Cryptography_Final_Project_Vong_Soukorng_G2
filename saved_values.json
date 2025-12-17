@@ -13,27 +13,28 @@
       "available": []
     },
     "n": {
-      "added": [
+      "added": [],
+      "available": [
         "n1",
         "n2",
         "n3"
-      ],
-      "available": []
+      ]
     },
     "c": {
       "added": [
         "c2",
-        "c3",
         "c1"
       ],
-      "available": []
+      "available": [
+        "c3"
+      ]
     },
     "d": {
-      "added": [
+      "added": [],
+      "available": [
         "dp",
         "dq"
-      ],
-      "available": []
+      ]
     }
   }
 }

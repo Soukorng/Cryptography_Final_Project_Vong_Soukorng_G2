@@ -1,0 +1,7 @@
+__pycache__/
+venv/
+saved_values.json
+tempCodeRunnerFile.py
+*.txt
+
+
