@@ -5,6 +5,7 @@ import gmpy2
 import threading
 import time
 from typing import Optional, Tuple
+from factordb.factordb import FactorDB
 
 # Secure precision setting
 gmpy2.get_context().precision = 4096
@@ -13,14 +14,8 @@ gmpy2.get_context().precision = 4096
 #                 SECURE FACTORDB INTEGRATION
 # ==========================================================
 def factor_from_factordb(n: int, timeout: int = 15) -> Tuple[Optional[int], Optional[int]]:
-    """
-    Secure FactorDB query with timeout and validation.
-    Query factordb.com for factors of n.
-    Returns (p, q) if successful, (None, None) otherwise.
-    """
+    
     try:
-        from factordb.factordb import FactorDB
-        
         # Security check: Don't query for very small numbers
         if n < 1000:
             return None, None  # Too small, use local methods
