@@ -1,3 +1,4 @@
+# rsa_core/__init__.py
 from .utils import mod_inverse, is_perfect_square, validate_rsa_params
 from .converters import int_to_bytes, bytes_to_hex, try_decode
 from .decrypt import rsa_decrypt, rsa_crt_decrypt, decrypt_with_phi, decrypt_with_pq, recover_prime_from_n, decrypt_with_n_and_prime

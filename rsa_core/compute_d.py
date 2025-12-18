@@ -1,3 +1,4 @@
+# rsa_core/compute_d.py
 from .utils import mod_inverse
 
 def compute_d(p: int, q: int, e: int) -> int:

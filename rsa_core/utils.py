@@ -1,6 +1,7 @@
+# rsa_core/utils.py
 import math
 from typing import Tuple
-import gmpy2
+
 
 def egcd(a: int, b: int) -> Tuple[int, int, int]:
     """Extended Euclidean Algorithm - constant time implementation"""
@@ -71,30 +72,3 @@ def validate_rsa_params(**kwargs) -> bool:
             print(f"[SECURITY] WARNING: Small modulus: {n.bit_length()} bits")
     
     return True
-
-def secure_random_prime(bits: int) -> int:
-    """
-    Generate a secure random prime using system entropy.
-    For testing purposes only - use cryptography library for production.
-    """
-    import secrets
-    
-    while True:
-        # Generate odd number with top bits set
-        candidate = secrets.randbits(bits)
-        candidate |= (1 << (bits - 1)) | 1
-        
-        # Simple primality test (use gmpy2 for better performance)
-        if gmpy2.is_prime(candidate):
-            return int(candidate)
-
-def bytes_to_int_secure(data: bytes) -> int:
-    """Convert bytes to integer securely"""
-    return int.from_bytes(data, 'big', signed=False)
-
-def int_to_bytes_secure(n: int) -> bytes:
-    """Convert integer to bytes with minimal length"""
-    if n == 0:
-        return b'\x00'
-    
-    return n.to_bytes((n.bit_length() + 7) // 8, 'big')

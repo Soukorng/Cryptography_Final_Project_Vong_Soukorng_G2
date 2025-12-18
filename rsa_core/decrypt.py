@@ -1,3 +1,4 @@
+# rsa_core/decrypt.py
 from .factorize import smart_factor_n, smart_factor_phi
 from .compute_d import compute_d_from_phi, compute_d
 from .utils import mod_inverse

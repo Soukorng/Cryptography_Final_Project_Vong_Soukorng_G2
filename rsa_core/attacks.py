@@ -1,8 +1,10 @@
+# rsa_core/attacks.py
 import math
 import gmpy2
+from functools import reduce
 from typing import Optional, List, Callable
 from .utils import mod_inverse, validate_rsa_params, egcd
-
+from .factorize import smart_factor_n
 def low_exponent_attack(e: int, n: int, c: int) -> Optional[int]:
     """
     Attack when e is very small (e=3, e=5, etc.) and m^e < n.
@@ -135,9 +137,6 @@ def hastad_broadcast_attack(e: int,
     try:
         # Step 1: Use Chinese Remainder Theorem to recover m^e
         log(f"[Håstad] Applying Chinese Remainder Theorem...")
-        
-        # Import CRT implementation
-        from functools import reduce
         
         def chinese_remainder_theorem(remainders, moduli):
             """
@@ -474,7 +473,6 @@ def double_encryption_attack(n: int, e1: int, e2: int, c: int, log_callback=None
     log(f"[Double Encryption] Strategy 5: Factorization")
     
     try:
-        from .factorize import smart_factor_n
         p, q = smart_factor_n(n, use_factordb=True)
         
         if p and q:
