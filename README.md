@@ -65,6 +65,8 @@ pip install -r requirements.txt
 
 ```
 
+---
+
 ## Usage Examples
 ### 1. Run the application
 ```bash
@@ -122,6 +124,8 @@ Cryptography_Final_Project_Vong_Soukorng_G2/
 ├── requirements.txt                  # Python dependencies
 └── README.md                         # This file
 ```
+
+---
 
 ## Dependencies
 ```bash
