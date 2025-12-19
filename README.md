@@ -1,13 +1,13 @@
 # Cryptography_Final_Project_Vong_Soukorng_G2
-# RSA CRACKER TOOL
+# RSA CRACKER
 
 ## Version
-**v1.0.0 - Final Version of RSA CRACKER TOOL**
+**v1.0.0 - Final Version of RSA CRACKER**
 
 ---
 
 ## Project Overview
-The **RSA Cracker Tool** is an advanced, user-friendly application designed for CTF (Capture The Flag), cryptography education. This tool provides a comprehensive suite of RSA cryptanalysis techniques through a User-friendly graphical interface, making complex mathematical attacks accessible to both beginners and security professionals.
+The **RSA Cracker** is an advanced, user-friendly application designed for CTF (Capture The Flag), cryptography education. This tool provides a comprehensive suite of RSA cryptanalysis techniques through a User-friendly graphical interface, making complex mathematical attacks accessible to both beginners and security professionals.
 
 ---
 
