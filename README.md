@@ -84,6 +84,7 @@ python main.py
 ---
 
 ## Project Structure
+```bash
 Cryptography_Final_Project_Vong_Soukorng_G2/
 ├── rsa_core/                         # Core RSA functionality
 │   ├── attacks/                      # Attack implementations
@@ -120,19 +121,19 @@ Cryptography_Final_Project_Vong_Soukorng_G2/
 ├── main.py                           # Application entry point
 ├── requirements.txt                  # Python dependencies
 └── README.md                         # This file
-
----
+```
 
 ## Dependencies
+```bash
 gmpy2>=2.2.0              # Fast large integer arithmetic
 factordb-python>=1.0.0    # FactorDB online factorization API
 customtkinter>=5.2.2      # Modern GUI framework
-
+```
 ---
 
 ## Author
-Vong Soukorng
-Cybersecurity Specialization
-Final Cryptography Project
+Vong Soukorng  
+Cybersecurity Specialization  
+Final Cryptography Project  
 
 ---
