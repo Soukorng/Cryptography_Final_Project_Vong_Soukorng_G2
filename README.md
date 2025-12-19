@@ -1,10 +1,17 @@
 # Cryptography_Final_Project_Vong_Soukorng_G2
 # RSA CRACKER TOOL
 
-# Project Overview
-RSA Cracker Tool is an advanced, user-friendly application designed for CTF (Capture The Flag), cryptography education. This tool provides a comprehensive suite of RSA cryptanalysis techniques through a User-friendly graphical interface, making complex mathematical attacks accessible to both beginners and security professionals.
+## Version
+**v1.0.0 - Final Version of RSA CRACKER TOOL**
 
-# Key Features
+---
+
+## Project Overview
+The **RSA Cracker Tool** is an advanced, user-friendly application designed for CTF (Capture The Flag), cryptography education. This tool provides a comprehensive suite of RSA cryptanalysis techniques through a User-friendly graphical interface, making complex mathematical attacks accessible to both beginners and security professionals.
+
+---
+
+## Key Features
 - Modern User-Friendly GUI
 - 11+ RSA Crack Methods
 - Automatically Crack Challenges
@@ -16,38 +23,9 @@ RSA Cracker Tool is an advanced, user-friendly application designed for CTF (Cap
 - Reset, Copy, History Functionality
 - Cross-Platform
 
-# Installation/Setup
-1. Clone the repository
-git clone https://github.com/Soukorng/Cryptography_Final_Project_Vong_Soukorng_G2.git
-cd Cryptography_Final_Project_Vong_Soukorng_G2
+---
 
-2. Create virtual environment 
-On Windows: 
-python -m venv venv
-venv\Scripts\activate
-
-On Linux/Mac:
-python3 -m venv venv
-source venv/bin/activate
-
-3. Install dependencies
-pip install -r requirements.txt
-
-# Usage Examples
-1. Run the application
-python main.py
-
-- Left Panel: Input RSA parameters (e, n, c, p, q, d, φ, etc) 
-- Click "CRACK RSA": Tool runs all applicable cracks method in priority order
-- Click "Reset": Erase all input and results
-- Click "Save Values": Saved all input and load it back when reopen tool
-
-- Right Panel: View results in multiple formats (ASCII, HEX, Decimal, Bytes)
-- Click "Copy": Copied all the results display to clipboard
-- Click "Save": Save all the results display into a file
-- Click "History": Display the last 10 successful cracked results
-
-# Supported RSA Attacks
+## Supported RSA Attacks
 - Low Exponent Attack (Small e)
 - Wiener’s Attack (Small d)
 - Håstad’s Broadcast Attack
@@ -61,7 +39,51 @@ python main.py
 - Standard Decryption
 - Smart Hybrid Factorization
 
-# Project Structure
+---
+
+## Installation/Setup
+### 1. Clone the repository
+```bash
+git clone https://github.com/Soukorng/Cryptography_Final_Project_Vong_Soukorng_G2.git
+cd Cryptography_Final_Project_Vong_Soukorng_G2
+```
+
+### 2. Create virtual environment 
+```bash
+# On Windows: 
+python -m venv venv
+venv\Scripts\activate
+
+# On Linux/Mac:
+python3 -m venv venv
+source venv/bin/activate
+```
+
+### 3. Install dependencies
+```bash
+pip install -r requirements.txt
+
+```
+
+## Usage Examples
+### 1. Run the application
+```bash
+python main.py
+```
+
+- Left Panel: Input RSA parameters (e, n, c, p, q, d, φ, etc) 
+- Click "CRACK RSA": Tool runs all applicable cracks method in priority order
+- Click "Reset": Erase all input and results
+- Click "Save Values": Saved all input and load it back when reopen tool
+
+- Right Panel: View results in multiple formats (ASCII, HEX, Decimal, Bytes)
+- Click "Copy": Copied all the results display to clipboard
+- Click "Save": Save all the results display into a file
+- Click "History": Display the last 10 successful cracked results
+
+---
+
+## Project Structure
 Cryptography_Final_Project_Vong_Soukorng_G2/
 ├── rsa_core/                         # Core RSA functionality
 │   ├── attacks/                      # Attack implementations
@@ -99,12 +121,18 @@ Cryptography_Final_Project_Vong_Soukorng_G2/
 ├── requirements.txt                  # Python dependencies
 └── README.md                         # This file
 
-# Dependencies
+---
+
+## Dependencies
 gmpy2>=2.2.0              # Fast large integer arithmetic
 factordb-python>=1.0.0    # FactorDB online factorization API
 customtkinter>=5.2.2      # Modern GUI framework
 
-# Author
+---
+
+## Author
 Vong Soukorng
 Cybersecurity Specialization
 Final Cryptography Project
+
+---
