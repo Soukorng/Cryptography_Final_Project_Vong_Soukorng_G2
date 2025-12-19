@@ -41,7 +41,7 @@ class RSACracker:
     
     def __init__(self, root):
         self.root = root
-        self.root.title("RSA CRACKER TOOL")
+        self.root.title("RSA CRACKER")
         self.root.geometry("1000x650")
         
         # Configure theme
@@ -115,7 +115,7 @@ class RSACracker:
         self.start_time = time.time()
         
         self.log("=" * 70, "header")
-        self.log("RSA CRACKER TOOL", "header")
+        self.log("RSA CRACKER", "header")
         self.log("=" * 70, "header")
         self.log(f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         self.log("")
