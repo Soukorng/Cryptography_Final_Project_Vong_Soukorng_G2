@@ -1,50 +1,14 @@
-# rsa_core/utils.py
-import math
-from typing import Tuple
-
-
-def egcd(a: int, b: int) -> Tuple[int, int, int]:
-    """Extended Euclidean Algorithm - constant time implementation"""
-    if a == 0:
-        return b, 0, 1
-    
-    g, y, x = egcd(b % a, a)
-    return g, x - (b // a) * y, y
-
-def mod_inverse(a: int, m: int) -> int:
-    """
-    Secure modular inverse using extended Euclidean algorithm.
-    Raises ValueError if inverse doesn't exist.
-    """
-    # Input validation
-    if m <= 0:
-        raise ValueError("Modulus must be positive")
-    
-    g, x, _ = egcd(a, m)
-    if g != 1:
-        raise ValueError(f"No modular inverse for {a} mod {m}")
-    
-    return x % m
-
-def is_perfect_square(n: int) -> bool:
-    """Check if n is a perfect square using integer sqrt"""
-    if n < 0:
-        return False
-    
-    root = int(math.isqrt(n))
-    return root * root == n
+"""RSA Parameter Validation"""
 
 def validate_rsa_params(**kwargs) -> bool:
     """
     Validate RSA parameters for security.
     Returns True if parameters are valid.
     """
-    # Check for None values
     for key, value in kwargs.items():
         if value is None:
             continue
         
-        # Ensure values are integers
         if not isinstance(value, int):
             return False
         
@@ -64,7 +28,6 @@ def validate_rsa_params(**kwargs) -> bool:
         
         # Check n is odd (except for attack scenarios)
         if n % 2 == 0 and 'e' in kwargs:
-            # Even n is only acceptable in attack scenarios
             print("[SECURITY] WARNING: Even modulus detected")
         
         # Check minimum size
